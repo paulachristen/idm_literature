@@ -16,7 +16,7 @@ library(janitor)
 ############################################################################
 ######################## Publication Data ##################################
 # Get Publication data -----------------------------------------------------
-#df <- read.csv("data/490k_141224_1234_dedup.csv") --> needs to be saved locally due to GitHub data upload limitations
+df <- read.csv("data/490k_141224_1234_dedup.csv") #--> needs to be saved locally due to GitHub data upload limitations
 df <- clean_names(df)
 
 # Remove all excluded records ----------------------------------------------
@@ -147,6 +147,13 @@ df_annual[, 3:ncol(df_annual)] <- lapply(df_annual[, 3:ncol(df_annual)], factor)
 cols_to_remove <- sapply(df_annual, function(x) length(unique(x)) == 1)
 df_annual <- df_annual[!cols_to_remove]
 
+#log-transform the outcome variable for linearization
+df_annual$n_pub_log <- log(df_annual$n_pub + 1)  # Add 1 to avoid log(0) issues
+
+plot(df_annual$year, df_annual$n_pub_log, type = "b", pch = 16, col = "red",
+     xlab = "Time", ylab = "Log(Number of Publications)",
+     main = "Log Publications Over Time")
+
 # Poisson regression adjusting for outbreaks with binary variables ---------
 m1 <- glm(n_pub ~ 
           year + 
@@ -168,6 +175,74 @@ sjPlot::tab_model(m1,
                   wrap.labels = 50,
                   show.aic = TRUE,
                   p.style = "stars") 
+
+############################################################################
+############ Model with log pub adjustment to outbreak data ################
+############################################################################
+
+m1.1 <- glm(n_pub_log ~ 
+            year + 
+            hong_kong_flu_pandemic_h3n2 + 
+            russian_flu_pandemic_h1n1 + 
+            hiv_aids_pandemic + 
+            severe_acute_respiratory_syndrome_sars_coronavirus + 
+            swine_flu_h1n1_pandemic + 
+            mers + 
+            uptick_in_polio + 
+            ebola + 
+            zika + 
+            covid_19 + 
+            m_pox,
+          data = df_annual, 
+          family = poisson(link = "log"))
+
+sjPlot::tab_model(m1.1,
+                  wrap.labels = 50,
+                  show.aic = TRUE,
+                  p.style = "stars") 
+
+dispersion_ratio <- sum(residuals(m1.1, type = "pearson")^2) / df.residual(m1.1)
+dispersion_ratio # dispersion_ratio < 1, hence, not considering a negative binomial regression
+
+exp(coef(m1.1))
+
+############################################################################
+############ Model with log pub adjustment to outbreak data ################
+############################################################################
+
+m1.2 <- glm(n_pub_log ~ 
+              year + 
+              hong_kong_flu_pandemic_h3n2 + 
+              hong_kong_flu_pandemic_h3n2:year +
+              russian_flu_pandemic_h1n1 + 
+              russian_flu_pandemic_h1n1:year + 
+              hiv_aids_pandemic + 
+              hiv_aids_pandemic:year + 
+              severe_acute_respiratory_syndrome_sars_coronavirus + 
+              severe_acute_respiratory_syndrome_sars_coronavirus:year + 
+              swine_flu_h1n1_pandemic + 
+              swine_flu_h1n1_pandemic:year + 
+              mers + 
+              mers:year + 
+              uptick_in_polio + 
+              uptick_in_polio:year + 
+              ebola + 
+              ebola:year + 
+              zika + 
+              zika:year + 
+              covid_19 + 
+              covid_19:year + 
+              m_pox + 
+              m_pox:year,
+            data = df_annual, 
+            family = poisson(link = "log"))
+
+sjPlot::tab_model(m1.2,
+                  wrap.labels = 50,
+                  show.aic = TRUE,
+                  p.style = "stars") 
+
+#model not converging
 
 ############################################################################
 ############ Model excluding COVID-19 pandemic #############################
@@ -289,6 +364,9 @@ df_annual[, 3:ncol(df_annual)] <- lapply(df_annual[, 3:ncol(df_annual)], factor)
 cols_to_remove <- sapply(df_annual, function(x) length(unique(x)) == 1)
 df_annual <- df_annual[!cols_to_remove]
 
+#log-transform the outcome variable for linearization
+df_annual$n_pub_log <- log(df_annual$n_pub + 1)  # Add 1 to avoid log(0) issues
+
 # Poisson regression adjusting for outbreaks with binary variables ---------
 m4 <- glm(n_pub ~ 
             year + 
@@ -307,6 +385,29 @@ m4 <- glm(n_pub ~
           family = poisson(link = "log"))
 
 sjPlot::tab_model(m4,
+                  wrap.labels = 50,
+                  show.aic = TRUE,
+                  p.style = "stars") 
+
+
+# Poisson regression adjusting for outbreaks with binary variables & logged n_pub ---------
+m4.1 <- glm(n_pub_log ~ 
+            year + 
+            hong_kong_flu_pandemic_h3n2 + 
+            russian_flu_pandemic_h1n1 + 
+            hiv_aids_pandemic + 
+            severe_acute_respiratory_syndrome_sars_coronavirus + 
+            swine_flu_h1n1_pandemic + 
+            mers + 
+            uptick_in_polio + 
+            ebola + 
+            zika + 
+            covid_19 + 
+            m_pox,
+          data = df_annual, 
+          family = poisson(link = "log"))
+
+sjPlot::tab_model(m4.1,
                   wrap.labels = 50,
                   show.aic = TRUE,
                   p.style = "stars") 
