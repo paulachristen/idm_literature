@@ -20,7 +20,13 @@ library("ggrepel") # "ggplot2" extension for overlapping text labels
 # Get world data ----------------------------------------------------------
 
 world <- ne_countries(scale = "small", returnclass = "sf")
+world$iso_a3 <- ifelse(world$iso_a3 == "-99", 
+                       world$iso_a3_eh,
+                       world$iso_a3)
 
+world$iso_a3 <- ifelse(world$iso_a3 == "-99", 
+                       world$sov_a3,
+                       world$iso_a3)
 
 # Change map projection ---------------------------------------------------
 
@@ -49,6 +55,8 @@ pc_country <- pc |>
   group_by(country) |>
   summarize(n = n()) |>
   rename(n_cit = n)
+
+pc_country$n_cit_log <- log(pc_country$n_cit + 1)  # Add 1 to avoid log(0) issues
 
 # Load data ----------------------------------------------------------------
 country_dict <- readxl::read_excel("data/countries_regions.xlsx")
@@ -97,13 +105,21 @@ countries_pc <- world %>%
   left_join(data_with_iso, by = c("iso_a3" = "Iso3")) %>%
   filter(!is.na(iso_a3))
 
+countries_pc <- merge(world[,c("geometry", "name", "iso_a3")],
+                      data_with_iso, 
+                      by.x = "name",
+                      by.y = "country",
+                      all.y = TRUE)
+
+countries_pc$n_cit_log <- log(countries_pc$n_cit + 1)  # Add 1 to avoid log(0) issues
+
 # Countries of policy documents in which IDM lit was cited ----------------
 world %>%
   filter(admin != "Antarctica") %>%
   st_transform(crs = "+proj=robin") %>%
   ggplot() +
   geom_sf(color = "grey") +
-  geom_sf(data = countries_pc, aes(fill = n_cit))+
+  geom_sf(data = countries_pc, aes(fill = n_cit_log))+
   theme_minimal() +
   theme(plot.title = element_text(face = "bold"),
         axis.text.x = element_blank(),
@@ -116,3 +132,44 @@ world %>%
 ggsave("results/idm_in_policydocs_map.png")
 
 
+
+###################
+
+
+# Add iso3 country code ---------------------------------------------------
+data_with_iso <- data_raw %>%
+  mutate(Iso3 = countrycode::countrycode(
+    sourcevar = country, 
+    origin = "country.name", 
+    destination = "iso3c")
+  )
+
+# Apply logarithmic transformation ----------------------------------------
+data_with_iso <- data_with_iso %>%
+  mutate(n_cit_log = log1p(n_cit))  # log1p ensures log(0) is handled (log(0) = -Inf)
+
+# Join datasets -----------------------------------------------------------
+countries_pc <- world %>%
+  dplyr::select(geometry, name, iso_a3) %>%
+  left_join(data_with_iso, by = c("iso_a3" = "Iso3")) %>%
+  filter(!is.na(iso_a3))
+
+# Map with log-transformed values -----------------------------------------
+world %>%
+  filter(admin != "Antarctica") %>%
+  st_transform(crs = "+proj=robin") %>%
+  ggplot() +
+  geom_sf(color = "grey") +
+  geom_sf(data = countries_pc, aes(fill = n_cit_log)) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue", na.value = "grey80") +  # Adjust colors as needed
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"),
+        axis.text.x = element_blank(),
+        legend.position = "bottom", 
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 6)) +
+  labs(title = "",
+       x = NULL, y = NULL, fill = "Log of Citations")  # Updated legend title
+
+# Save the plot
+ggsave("results/idm_in_policydocs_map.png")
