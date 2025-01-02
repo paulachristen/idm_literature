@@ -176,41 +176,12 @@ sjPlot::tab_model(m1,
                   show.aic = TRUE,
                   p.style = "stars") 
 
-############################################################################
-############ Model with log pub adjustment to outbreak data ################
-############################################################################
-
-m1.1 <- glm(n_pub_log ~ 
-            year + 
-            hong_kong_flu_pandemic_h3n2 + 
-            russian_flu_pandemic_h1n1 + 
-            hiv_aids_pandemic + 
-            severe_acute_respiratory_syndrome_sars_coronavirus + 
-            swine_flu_h1n1_pandemic + 
-            mers + 
-            uptick_in_polio + 
-            ebola + 
-            zika + 
-            covid_19 + 
-            m_pox,
-          data = df_annual, 
-          family = poisson(link = "log"))
-
-sjPlot::tab_model(m1.1,
-                  wrap.labels = 50,
-                  show.aic = TRUE,
-                  p.style = "stars") 
-
-dispersion_ratio <- sum(residuals(m1.1, type = "pearson")^2) / df.residual(m1.1)
-dispersion_ratio # dispersion_ratio < 1, hence, not considering a negative binomial regression
-
-exp(coef(m1.1))
 
 ############################################################################
 ############ Model with log pub adjustment to outbreak data ################
 ############################################################################
 
-m1.2 <- glm(n_pub_log ~ 
+m1.2 <- glm(n_pub ~ 
               year + 
               hong_kong_flu_pandemic_h3n2 + 
               hong_kong_flu_pandemic_h3n2:year +
@@ -388,27 +359,3 @@ sjPlot::tab_model(m4,
                   wrap.labels = 50,
                   show.aic = TRUE,
                   p.style = "stars") 
-
-
-# Poisson regression adjusting for outbreaks with binary variables & logged n_pub ---------
-m4.1 <- glm(n_pub_log ~ 
-            year + 
-            hong_kong_flu_pandemic_h3n2 + 
-            russian_flu_pandemic_h1n1 + 
-            hiv_aids_pandemic + 
-            severe_acute_respiratory_syndrome_sars_coronavirus + 
-            swine_flu_h1n1_pandemic + 
-            mers + 
-            uptick_in_polio + 
-            ebola + 
-            zika + 
-            covid_19 + 
-            m_pox,
-          data = df_annual, 
-          family = poisson(link = "log"))
-
-sjPlot::tab_model(m4.1,
-                  wrap.labels = 50,
-                  show.aic = TRUE,
-                  p.style = "stars") 
-
