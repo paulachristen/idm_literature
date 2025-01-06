@@ -1,0 +1,83 @@
+---
+title: "IDM Literature Analysis Markdown"
+output: html_document
+date: "2025-01-06"
+---
+
+```{r setup, include=FALSE}
+# Install R packages if not installed -------------------------------------
+
+if (!require("ggplot2")) install.packages("ggplot2", dependencies = TRUE)
+if (!require("dplyr")) install.packages("dplyr", dependencies = TRUE)
+if (!require("patchwork")) install.packages("patchwork", dependencies = TRUE)
+if (!require("janitor")) install.packages("janitor", dependencies = TRUE)
+if (!require("segmented")) install.packages("segmented", dependencies = TRUE)
+
+# Load R packages ---------------------------------------------------------
+
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+library(janitor)
+library(segmented)
+
+```
+
+```{r}
+# Get Publication data -----------------------------------------------------
+data <- read.csv("data/490k_141224_1234_dedup.csv") #--> needs to be saved locally due to GitHub data upload limitations
+data <- clean_names(data)
+```
+
+```{r}
+data2 <- data %>% 
+    dplyr::select(year, title, decision) %>%
+    filter(year>=1980 & year<=2024) 
+
+data_counts <- data2 %>%
+    filter(decision == "Include") %>%
+    count(year) %>%
+  mutate(t_year = year - min(year))
+```
+
+```{r pressure, echo=FALSE}
+# Look for changepoints using piecewise poisson regression
+poisson_m <- glm(n ~ 
+          t_year,
+          data = data_counts, 
+          family = poisson(link = "log"))
+
+seg_model1 <- segmented(poisson_m, seg.Z = ~t_year, psi = list(t_year = median(data_counts$t_year)))
+seg_model2 <- segmented(poisson_m, seg.Z = ~t_year, psi = list(t_year = c(median(data_counts$t_year) - 2, median(data_counts$t_year) + 2)))
+seg_model3 <- segmented(poisson_m, seg.Z = ~t_year, psi = list(t_year = c(median(data_counts$t_year) - 3, median(data_counts$t_year), median(data_counts$t_year) + 3)))
+
+list(
+    poisson_m1 = seg_model1$psi + min(data_counts$year),
+    poisson_m2 = seg_model2$psi + min(data_counts$year),
+    poisson_m3 = seg_model3$psi + min(data_counts$year)
+)
+```
+
+```{r}
+model_fits <- tibble(
+  year = data_counts$year,
+  n = data_counts$n,
+  seg_poisson_model1_fit = predict(seg_model1) %>% exp,
+  seg_poisson_model2_fit = predict(seg_model2) %>% exp,
+  seg_poisson_model3_fit = predict(seg_model3) %>% exp
+)
+
+model_fits_long <- model_fits %>%
+  pivot_longer(cols = starts_with("seg_"), 
+               names_to = "model", 
+               values_to = "fitted_n")
+
+ggplot(model_fits_long, aes(x = year)) +
+  geom_point(data = data_counts, aes(x = year, y = n), color = "black") +  # Data points
+  geom_line(aes(y = fitted_n, color = model), linewidth = 1) +  # Fitted lines
+  facet_wrap(~ model, scales = "free_y") +  # Create a facet for each model
+  labs(x = "Year", y = "Number of articles") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
