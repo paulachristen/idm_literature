@@ -9,6 +9,7 @@ date: "2025-01-06"
 
 if (!require("ggplot2")) install.packages("ggplot2", dependencies = TRUE)
 if (!require("dplyr")) install.packages("dplyr", dependencies = TRUE)
+if (!require("tidyr")) install.packages("dplyr", dependencies = TRUE)
 if (!require("patchwork")) install.packages("patchwork", dependencies = TRUE)
 if (!require("janitor")) install.packages("janitor", dependencies = TRUE)
 if (!require("segmented")) install.packages("segmented", dependencies = TRUE)
@@ -20,6 +21,7 @@ library(dplyr)
 library(patchwork)
 library(janitor)
 library(segmented)
+library(tidyr)
 
 ```
 
@@ -68,7 +70,7 @@ model_fits <- tibble(
 )
 
 model_fits_long <- model_fits %>%
-  pivot_longer(cols = starts_with("seg_"), 
+  tidyr::pivot_longer(cols = starts_with("seg_"), 
                names_to = "model", 
                values_to = "fitted_n")
 
