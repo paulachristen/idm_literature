@@ -27,7 +27,7 @@ library(tidyr)
 
 ```{r}
 # Get Publication data -----------------------------------------------------
-data <- read.csv("data/490k_141224_1234_dedup.csv") #--> needs to be saved locally due to GitHub data upload limitations
+data <- read.csv("490k_141224_1234_dedup.csv") #--> needs to be saved locally due to GitHub data upload limitations
 data <- clean_names(data)
 ```
 

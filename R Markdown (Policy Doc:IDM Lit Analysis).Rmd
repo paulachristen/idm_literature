@@ -1,0 +1,199 @@
+---
+title: "R Markdown (Policy Doc/IDM Lit Analysis )"
+author: "Emma Chapman-Banks"
+date: "2025-01-18"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(repos = c(CRAN = "https://cran.rstudio.com"))
+```
+
+# ***Part 1: Cross-Referencing Policy Documents and Abstracts (Same Country)*** 
+
+Load libraries
+```{r}
+library("tidyverse")
+library("sf") 
+library("countrycode") 
+library("ggrepel") 
+library("gt")
+library("dplyr")
+library("tidyr")
+```
+
+Read the data
+```{r}
+overton_data <- read.csv("data/overton_results_expanded.csv")
+idm_data <- read.csv("data/Combined_Location_With_Metadata.csv")
+```
+
+Before creating this R markdown, I ran the analysis by joining the datasets together then cross-referencing the dois and country location. This returned zero results. At first, I was puzzled, but then I realised it was because the countries might be spelt differently or be abbreviated. Therefore, before joining the datasets, I used the Iso3 country codes and standardised the country names across the data sets 
+
+Standardise IDM Data. This code is the same code used in the World Mapping Markdown.
+```{r}
+# Define manual mappings only for ambiguous single locations
+manual_mapping <- list(
+  "England and Wales" = "GBR",
+  "England & Wales" = "GBR",
+  "Fayoum, Egypt" = "EGY",
+  "New York metropolitan area" = "USA",
+  "Hebei Province, China" = "CHN",
+  "Brasilia, Brazil" = "BRA",
+  "Michigan, U.S.A.; New York City, U.S.A." = "USA",
+  "Edmonton, Alberta, Canada" = "CAN",
+  "South India" = "IND",
+  "sub-Saharan Africa" = "unmapped",  # Exclude broad regions
+  "southeastern United States" = "USA",
+  "Kalutara District; Sri Lanka" = "LKA",
+  "Lausanne" = "CHE",
+  "Britain" = "GBR",
+  "England, UK" = "GBR",
+  "U.S." = "USA",
+  "Mexico; Southern region of Mexico" = "MEX",
+  "Washington State" = "USA",
+  "Europe" = "unmapped",
+  "Kalutara District" = "LKA"
+)
+
+# Process `llm_location` column
+idm_data_clean <- idm_data %>%
+  filter(!is.na(llm_location) & llm_location != "") %>%  # Remove blanks/NA
+  separate_rows(llm_location, sep = ";\\s*") %>%         # Split multiple countries
+  mutate(
+    llm_location_resolved = recode(llm_location, !!!manual_mapping, .default = llm_location),
+    Iso3 = ifelse(
+      llm_location_resolved %in% c("BRA", "CAN", "CHE", "CHN", "EGY", "GBR", "IND", "LKA"), # Skip remapping for valid ISO3 codes
+      llm_location_resolved,
+      countrycode::countrycode(
+        sourcevar = llm_location_resolved,
+        origin = "country.name",
+        destination = "iso3c",
+        warn = FALSE  # Suppress warnings for unmatched values
+      )
+    )
+  ) %>%
+  mutate(Iso3 = ifelse(is.na(Iso3), "unmapped", Iso3))  
+
+# Add Status column to indicate whether a location is mapped or unmapped
+idm_data_clean <- idm_data_clean %>%
+  mutate(Status = ifelse(Iso3 == "unmapped", "Unmapped", "Mapped"))
+
+# Identify unmatched values for review
+unmatched <- idm_data_clean %>%
+  filter(Status == "Unmapped") %>%
+  distinct(llm_location_resolved) %>%
+  arrange(llm_location_resolved)
+
+# Print unmatched values for verification. This is to check and confirm that there hasn't been any countries missed. 
+print("Unmatched Values:")
+print(unmatched)
+```
+
+When trying to standarise the country codes for Overton data, I also realised that the new column it creates returns a value of NA if the country code is already written. Thus, I identified which country codes were already listed in the dataset and had to include the manual country mapping and ensure it doesn't pass as NA when doing country code mapping. 
+
+```{r}
+# Define manual mappings for unmatched values
+manual_country_mapping <- c(
+  "IGO" = "IGO",  
+  "EU" = "EU"     
+)
+
+# Standardise Overton Data and include manual mapping
+overton_data_clean <- overton_data %>%
+  mutate(
+    country_iso3 = if_else(
+      country %in% names(manual_country_mapping),
+      manual_country_mapping[country],
+      countrycode::countrycode(
+        sourcevar = country,
+        origin = "country.name",
+        destination = "iso3c",
+        warn = FALSE 
+      )
+    )
+  )
+
+```
+
+Now, cross-reference the two datasets.
+```{r}
+# Combine the datasets based on DOI and use the ISO3 country codes for comparison
+combined_data <- overton_data_clean %>%
+  inner_join(idm_data_clean, by = c("source_doi" = "doi"))
+
+# Filter where the policy document's country matches the IDM abstract's location
+matching_countries <- combined_data %>%
+  filter(country_iso3 == Iso3)
+
+# Count the number of matches
+number_of_matches <- nrow(matching_countries)
+
+# Print the result
+print(number_of_matches)
+
+#View the rows where the policy document's country matches the IDM literature's location (cleaned version for easier viewing)
+matching_countries_clean <- matching_countries %>%
+  select(total_citations, source_title, document_title, country, topics, title)
+
+matching_countries_clean %>%
+  head(10) %>%  # Show the first 10 rows (adjust as needed)
+  ggplot(aes(x = "", y = source_title, label = document_title)) +
+  geom_text() +
+  theme_void()
+
+knitr::kable(matching_countries_clean, caption = "Matching Countries")
+
+```
+
+# ***Part 2: Cross-Referencing Policy Documents and Abstracts (Different Country)*** 
+
+Now, let's answer this question: how many policy documents cite IDM literature from a country different from their own?
+```{r}
+# Filter where the policy document cites IDM literature from a different country
+global_research_citations <- combined_data %>%
+  filter(country_iso3 != Iso3)
+
+# Count the number of matches
+num_global_citations <- nrow(global_research_citations)
+
+# Print the result
+print(num_global_citations)
+
+#View the rows where the policy document's country does not match the IDM literature's location (cleaned version for easier viewing)
+global_research_citations_clean <- global_research_citations %>%
+  select(total_citations, source_title, document_title, country, title, llm_location, Iso3)
+#print(global_research_citations_clean)
+
+knitr::kable(global_research_citations_clean, caption = "Global Research Citations")
+```
+
+# ***Part 3: Abstracts with 1+ countries *** 
+
+Now, let's look at how many papers covered 1 country, 2 countries or 3 countries. 
+```{r}
+# Step 1: Split the countries into separate rows
+idm_data_split <- idm_data_clean %>%
+  mutate(countries = strsplit(as.character(Iso3), ";")) %>%
+  unnest(Iso3) %>%
+  mutate(Iso3 = trimws(Iso3))  # Clean up extra spaces
+
+# Step 2: Count the number of countries per paper (group by paper ID)
+country_count <- idm_data_split %>%
+  group_by(doi) %>%  # Replace `paper_id` with the unique identifier for each paper
+  summarize(num_countries = n_distinct(Iso3))
+
+# Step 3: Count how many papers cover 1, 2, 3, etc., countries
+coverage_summary <- country_count %>%
+  count(num_countries)
+
+# Step 4: Rename columns for better readability
+coverage_summary <- coverage_summary %>%
+  rename(
+    `Number of Countries Covered` = num_countries,
+    `Paper Count` = n
+  )
+# Step 5: View results 
+print(coverage_summary)
+```

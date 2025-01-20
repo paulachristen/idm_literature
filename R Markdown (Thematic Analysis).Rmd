@@ -1,0 +1,276 @@
+---
+title: "R Markdown (Thematic Analysis)"
+author: "Emma Chapman-Banks"
+date: "2025-01-17"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# ***Part 1: Thematic Analysis of Topics***
+
+Load the necessary packages 
+```{r}
+library(tidyr)
+library(tidytext)
+library(dplyr)
+library(ggplot2)
+```
+
+Load Overton Data
+```{r}
+overton_data <- read.csv("data/overton_results_expanded.csv")
+```
+
+From inspecting the data, topics quite often include multiple keywords. Therefore, we must separate each these words into their own separate rows to ensure that proper thematic analysis can be run 
+```{r}
+clean_data <- overton_data %>%
+  mutate(topics = strsplit(as.character(topics), ";")) %>%
+  unnest_longer(topics)%>%
+  mutate(topics = trimws(topics)) %>%
+  # Remove common stopwords (eg. and)
+  anti_join(stop_words, by = c("topics" = "word"))
+#view(clean_data) again, the data might be too large to view on a markdown 
+```
+
+With over 3,000+ rows, lets find a way to count the frequency of each key word and see how often they appear. 
+```{r}
+frequency_counts <- clean_data %>%
+  count(topics, sort = TRUE)
+```
+
+Once we have a table of frequencies, we can plot this to visualise the top 10, 20, or 30 key words appearing in these pieces of literature. 
+```{r}
+#For Top 10 
+frequency_counts %>%
+  top_n(10, n) %>%
+  ggplot(aes(x = reorder(topics, n), y = n)) +
+  geom_col(fill = "skyblue") +
+  coord_flip() +
+  labs(title = "Top 10 Most Common Topics", x = "Topic", y = "Frequency")
+
+#For Top 20 
+frequency_counts %>%
+  top_n(20, n) %>%
+  ggplot(aes(x = reorder(topics, n), y = n)) +
+  geom_col(fill = "skyblue") +
+  coord_flip() +
+  labs(title = "Top 20 Most Common Topics", x = "Topic", y = "Frequency")
+
+#For Top 30 
+frequency_counts %>%
+  top_n(30, n) %>%
+  ggplot(aes(x = reorder(topics, n), y = n)) +
+  geom_col(fill = "skyblue") +
+  coord_flip() +
+  labs(title = "Top 30 Most Common Topics", x = "Topic", y = "Frequency")
+```
+# ***Part 2: Thematic Analysis of Classifications***
+
+Now, lets analyse the classifications column, which (from my understanding), represents hierarchical levels assigned to each document with each level providing more detail. 
+Example: health -> disease and conditions -> communicable diseases 
+```{r}
+# Split classifications into individual categories
+clean_classifications <- overton_data %>%
+  mutate(classifications = strsplit(as.character(classifications), ";")) %>%
+  unnest(classifications) %>%
+  mutate(classifications = trimws(classifications))
+
+# Count frequency of classifications
+classification_counts <- clean_classifications %>%
+  count(classifications, sort = TRUE)
+
+# View the most frequent classifications
+print(classification_counts)
+```
+
+Let's construct a frequency table too. 
+```{r}
+# Visualise the top 10 most common classifications
+classification_counts %>%
+  top_n(10, n) %>%  # Select top 10 by frequency
+  ggplot(aes(x = reorder(classifications, n), y = n)) +  # Reorder topics for better visualization
+  geom_col(fill = "skyblue") +  # Create bar chart
+  coord_flip() +  # Flip coordinates for horizontal bars
+  labs(
+    title = "Most Common Classifications",
+    x = "Classification",
+    y = "Frequency"
+  ) +
+  theme_minimal()  # Apply a clean theme
+```
+
+
+# ***Part 3: Analysing "base classifications"***
+
+Now, we will take a closer look and dissect the subcategories of each base classification. Use function extract_subcategories for each category. 
+```{r}
+# Extract the base classifications
+base_classifications <- classification_counts %>%
+  mutate(base = sapply(strsplit(as.character(classifications), ">"), `[`, 1)) %>%
+  distinct(base)
+
+# View the base classifications
+print(base_classifications)
+
+# Function to Extract Subcategories for a Specific Base
+extract_subcategories <- function(base_name, data) {
+  data %>%
+    filter(grepl(paste0("^", base_name, ">"), classifications)) %>%
+    mutate(subcategories = gsub(paste0("^", base_name, ">"), "", classifications)) %>%
+    select(subcategories)
+}
+```
+
+***3.1: "Health"***
+```{r}
+health_subcategories <- extract_subcategories("health", classification_counts)
+print(health_subcategories)
+```
+
+***3.2: "Science and Technology"***
+```{r}
+st_subcategories <- extract_subcategories("science and technology", classification_counts)
+print(st_subcategories)
+```
+***3.3: "Society"***
+```{r}
+society_subcategories <- extract_subcategories("society", classification_counts)
+print(society_subcategories)
+```
+***3.4: "Education"***
+```{r}
+education_subcategories <- extract_subcategories("education", classification_counts)
+print(education_subcategories)
+```
+
+***3.5: "Labour"***
+```{r}
+labour_subcategories <- extract_subcategories("labour", classification_counts)
+print(labour_subcategories)
+```
+
+***3.6: "Environment"***
+```{r}
+environment_subcategories <- extract_subcategories("environment", classification_counts)
+print(environment_subcategories)
+```
+
+***3.7: "Economy, Business, and Finance"***
+```{r}
+ebf_subcategories <- extract_subcategories("economy, business and finance", classification_counts)
+print(ebf_subcategories)
+```			
+
+***3.8: "Disaster, Accident and Emergency Incident"***
+```{r}
+dae_subcategories <- extract_subcategories("disaster, accident and emergency incident", classification_counts)
+print(st_subcategories)
+```			
+
+***3.9: "Politics"***
+```{r}
+politics_subcategories <- extract_subcategories("politics", classification_counts)
+print(politics_subcategories)
+```
+
+***3.10: "Weather"***
+```{r}
+weather_subcategories <- extract_subcategories("weather", classification_counts)
+print(weather_subcategories)
+```
+
+***3.11: "Lifestyle and Leisure"***
+```{r}
+ll_subcategories <- extract_subcategories("lifestyle and leisure", classification_counts)
+print(ll_subcategories)
+```
+		
+***3.12: "Conflicts, War and Peace"***
+```{r}
+cwp_subcategories <- extract_subcategories("conflicts, war and peace", classification_counts)
+print(cwp_subcategories)
+```
+
+***3.13: "Crime, Law, and Justice"***
+```{r}
+clj_subcategories <- extract_subcategories("crime, law and justice", classification_counts)
+print(clj_subcategories)
+```
+
+# ***Part 4: Constructing a Flow Chart***
+***Ignore code for now. This is an example of how we can visualise the classifications and their respective categories.***
+
+```{r}
+# Install necessary packages
+if (!require(igraph)) install.packages("igraph")
+
+library(igraph)
+library(dplyr)
+
+# Example: Updated health_subcategories data
+health_subcategories <- data.frame(
+  subcategories = c(
+    "diseases and conditions",
+    "diseases and conditions>communicable disease>virus disease",
+    "diseases and conditions>communicable disease>virus disease>retrovirus",
+    "diseases and conditions>communicable disease>virus disease>AIDS",
+    "diseases and conditions>illness",
+    "health treatment",
+    "health treatment>medicine",
+    "health treatment>diet",
+    "health treatment>medical procedure/test",
+    "diseases and conditions>communicable disease>epidemic",
+    "diseases and conditions>communicable disease",
+    "health treatment>preventative medicine>vaccines",
+    "diseases and conditions>cancer",
+    "diseases and conditions>injury",
+    "health treatment>preventative medicine",
+    "healthcare policy>government health care"
+  ),
+  stringsAsFactors = FALSE
+)
+
+# Add "health" as the root node
+health_subcategories <- health_subcategories %>%
+  mutate(subcategories = paste("health", subcategories, sep = ">"))
+
+# Prepare edges dynamically by splitting subcategories
+edges <- strsplit(health_subcategories$subcategories, ">") %>%
+  lapply(function(path) {
+    if (length(path) > 1) {
+      # Create parent-child pairs dynamically
+      data.frame(from = head(path, -1), to = tail(path, -1), stringsAsFactors = FALSE)
+    } else {
+      NULL
+    }
+  }) %>%
+  do.call(rbind, .)
+
+# Create the graph from edges
+g <- graph_from_data_frame(edges, directed = TRUE)
+
+# Generate a tree-like layout
+layout <- layout_as_tree(g, root = "health")
+
+# Calculate custom spacing
+layout[, 1] <- layout[, 1] * 10  # Increase horizontal spacing significantly
+layout[, 2] <- layout[, 2] * 5   # Increase vertical spacing significantly
+
+# Manually jitter nodes horizontally for better separation (optional)
+layout[, 1] <- jitter(layout[, 1], amount = 2)  # Add randomness to avoid overlap
+
+# Plot the flow chart with adjusted layout
+plot(
+  g,
+  layout = layout,            # Use the adjusted layout
+  vertex.color = "lightblue",
+  vertex.size = 20,
+  vertex.label.cex = 0.8,     # Adjust label size
+  edge.arrow.size = 0.5,      # Adjust arrow size
+  main = "Flow Chart for Health Subcategories"
+)
+
+```
+

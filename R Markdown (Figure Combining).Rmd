@@ -1,0 +1,240 @@
+---
+title: "R Markdown (Figure Merging)"
+author: "Emma Chapman-Banks"
+date: "2025-01-17"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# ***Part 1: Merging Figures 1 and 4***
+
+Load necessary packages
+```{r}
+library(ggplot2)
+library(dplyr)
+library(janitor)
+```
+
+First, we will read, clean, and save publication data. This is from Paula's original code 
+```{r}
+# Get Publication data
+df <- read.csv("490k_141224_1234_dedup.csv") #Or change file path to wherever files are located
+df <- clean_names(df)
+
+# Remove all excluded records
+df <- df |>
+  filter(decision == "Include")
+
+# Calc publication records by year 
+df_annual <- df |>
+  group_by(year) |>
+  summarize(n = n()) |>
+  rename(n_pub = n)
+
+# Remove records prior to 1900 or after 2025 
+df_annual <- df_annual |>
+  filter(year < 2025) |>
+  filter(year > 1900)
+
+df_annual_save <- df_annual
+```
+
+Now, we will load in data for policy citations. Again, this is Paula's original code 
+```{r}
+
+pc <- read.csv("data/overton_results_expanded.csv") 
+pc <- clean_names(pc)
+
+# Transform date of policy documents to year get year 
+pc$published_on <- as.Date(pc$published_on)
+pc$year <- format(as.Date(pc$published_on, format="%Y-%m/%d"),"%Y")
+
+# Calc policy citations by year 
+pc_annual <- pc |>
+  group_by(year) |>
+  summarize(n = n()) |>
+  rename(n_cit = n)
+
+# Calc policy citations by org type and subtype
+pc_subtype <- pc |>
+                group_by(type, subtype) |>
+                summarize(n = n()) |>
+                rename(n_cit = n)
+
+write.csv(pc_subtype, 
+          "results/ec_aggregation_by_sub_type.csv", 
+          row.names = FALSE)
+```
+
+Let's first plot the plots separately to see what we are working with. Still Paula's code. 
+```{r}
+#Plot IDM in Policy Documents 
+ggplot(pc_annual, aes(x = as.numeric(year), y = n_cit)) +
+  geom_line() +
+  labs(x = "Year", y = "Citations of Infectious Disease Modelling Papers in Policy Documents") +
+  theme_bw()
+
+# Check the structure and summary of the data
+str(pc_annual)
+summary(pc_annual)
+
+# Find rows with missing or invalid values
+pc_annual |> filter(is.na(n_cit) | n_cit <= 0)
+```
+
+Plot publication data. 
+```{r}
+#Plot Publication Count 
+ggplot(df_annual, aes(x = year, y = n_pub)) +
+  geom_line() +
+  labs(x = "Year", y = "Publication Count") +
+  theme_bw()
+```
+
+Let's double check the structure of the dataset for publication count too. 
+```{r}
+# Check the structure and summary of the data
+str(df_annual)
+summary(df_annual)
+```
+
+It seems that pc_annual starts from 1989 and df_annual starts from 1948. This can create issues when merging so we must align the data ranges to ensure RStudio can read this correctly. 
+```{r}
+# Merge datasets, keeping all years from df_annual
+combined_df <- merge(df_annual, pc_annual, by = "year", all.x = TRUE)
+
+# Replace missing policy citation values (n_cit) with 0 (as pc_annual doesn't begin until 1989)
+combined_df$n_cit[is.na(combined_df$n_cit)] <- 0
+
+# Ensure n_pub is numeric
+combined_df$n_pub <- as.numeric(combined_df$n_pub)
+
+# Plot with secondary y-axis
+ggplot(combined_df, aes(x = year)) +
+  geom_line(aes(y = n_pub, color = "Publication Count")) +
+  geom_line(aes(y = n_cit * 15, color = "Policy Citations")) +  # Scale factor for secondary axis
+  scale_y_continuous(
+    name = "Publication Count",
+    sec.axis = sec_axis(~ . / 15, name = "Policy Citations")
+  ) +
+  labs(x = "Year", color = "Legend") +
+  theme_bw() +
+  theme(
+    axis.title.y.right = element_text(color = "black"),
+    axis.text.y.right = element_text(color = "black"),
+    legend.position = "bottom"
+  )
+```
+
+# ***Part 2: Merging all three plots together***
+
+Now, we will "superimpose" the publication count/policy citations with the outbreak timeline. 
+
+But first, lets load the outbreak timeline data (Paula's code)
+
+```{r}
+# Get Outbreaks timeline data 
+e_timeline <- readxl::read_excel("data/Epidemics Timeline.xlsx", 
+                                 sheet = 2)
+names(e_timeline)[1] <- c("year")
+e_timeline <- clean_names(e_timeline)
+
+# Reshape data to long format for ggplot2 
+data_long <- tidyr::pivot_longer(e_timeline, 
+                                 -year, 
+                                 names_to = "pathogen", 
+                                 values_to = "presence")
+data_long <- data_long |> filter(presence > 0)
+data_long <- data_long |> filter(year >= min(df_annual$year))
+
+# Reorder factor levels by frequency 
+data_long$pathogen <- factor(data_long$pathogen, 
+                             levels = names(sort(table(data_long$pathogen), 
+                                                 decreasing = TRUE)))
+# Order dataframe by year
+data_long <- data_long[order(data_long$year), ]
+```
+
+Now, Let's look at the plot. 
+```{r}
+# Plot Outbreak Timeline
+ggplot(data_long, aes(x = year, y = pathogen, color = pathogen)) +
+  geom_line(stat = "identity", size = 2) +
+  scale_x_continuous(breaks = seq(min(e_timeline$year), max(e_timeline$year), by = 2)) +
+  labs(y = "Outbreak") +
+  theme_minimal() +
+  theme(legend.position = "none", 
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_blank(), 
+        axis.title.x = element_blank())
+```
+
+We will now add the outbreak plot onto the publication/policy plot. 
+```{r}
+#Because I had issues with creating the legend. I needed to convert the legend labels into a factor (for pathogens) then precompute the breaks 
+data_long$pathogen <- factor(data_long$pathogen)
+pathogen_breaks <- c("Publication Count", "Policy Citations", levels(data_long$pathogen))
+
+# Create the plot
+ggplot(combined_df, aes(x = year)) +
+  geom_line(aes(y = n_pub, color = "Publication Count"), size = 1) +
+  geom_line(aes(y = n_cit * 15, color = "Policy Citations"), size = 1) +
+  geom_point(
+    data = data_long, 
+    aes(x = year, y = as.numeric(as.factor(pathogen)) * 300, color = pathogen), 
+    size = 3, alpha = 0.5
+  ) +
+  # Scales
+  scale_y_continuous(
+    name = "Publication Count",
+    sec.axis = sec_axis(~ . / 15, name = "Policy Citations"),
+    expand = expansion(mult = c(0.1, 0.1))
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0.1, 0.1))) +
+  scale_color_manual(
+    name = "Legend",
+    values = c(
+      "Publication Count" = "blue",
+      "Policy Citations" = "red",
+      "zika" = "lightpink",
+      "swine_flu_h1n1_pandemic" = "hotpink",
+      "severe_acute_respiratory_syndrome_sars_coronavirus" = "violet",
+      "russian_flu_pandemic_h1n1" = "mediumpurple1",
+      "m_pox" = "lightblue2",
+      "hong_kong_flu_pandemic_h3n2" = "azure",
+      "asian_flu_pandemic_h2n2" = "cyan4",
+      "mers" = "lightgreen",
+      "covid_19" = "mediumaquamarine",
+      "ebola" = "palegreen4",
+      "uptick_in_polio" = "maroon3",
+      "hiv_aids_pandemic" = "wheat1",
+      "cholera" = "lightsalmon"
+    ),
+    breaks = pathogen_breaks
+  ) +
+  labs(x = "Year", color = "Legend", y = NULL) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 8, face = "bold"),
+    legend.text = element_text(size = 6),
+    axis.title.y.right = element_text(color = "black"),
+    axis.text.y.right = element_text(color = "black"),
+    axis.text.y.left = element_text(size = 8),
+    panel.grid.major = element_line(color = "grey80", linewidth = 0.25), 
+    panel.grid.minor = element_line(color = "grey90", linewidth = 0.25) 
+  ) +
+  guides(
+    color = guide_legend(
+      override.aes = list(size = 3),
+      nrow = 5,
+      byrow = TRUE,
+      title.position = "top",
+      title.hjust = 0.5
+    )
+  )
+
+```
