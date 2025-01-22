@@ -99,7 +99,6 @@ Let's double check the structure of the dataset for publication count too.
 str(df_annual)
 summary(df_annual)
 ```
-
 It seems that pc_annual starts from 1989 and df_annual starts from 1948. This can create issues when merging so we must align the data ranges to ensure RStudio can read this correctly. 
 ```{r}
 # Merge datasets, keeping all years from df_annual
@@ -149,16 +148,33 @@ data_long <- tidyr::pivot_longer(e_timeline,
 data_long <- data_long |> filter(presence > 0)
 data_long <- data_long |> filter(year >= min(df_annual$year))
 
+# Renaming pathogens. This is done to help easier visualisation on the plot 
+rename_mapping <- c(
+  "zika" = "Zika",
+  "swine_flu_h1n1_pandemic" = "H1N1 Swine",
+  "severe_acute_respiratory_syndrome_sars_coronavirus" = "SARS",
+  "russian_flu_pandemic_h1n1" = "H1N1 Russian",
+  "m_pox" = "MPox",
+  "hong_kong_flu_pandemic_h3n2" = "H3N2 Hong Kong",
+  "asian_flu_pandemic_h2n2" = "H2N2 Asian",
+  "mers" = "MERS",
+  "covid_19" = "COVID-19",
+  "ebola" = "Ebola",
+  "uptick_in_polio" = "Polio",
+  "hiv_aids_pandemic" = "HIV/AIDS",
+  "cholera" = "Cholera"
+)
+
+data_long$pathogen <- dplyr::recode(data_long$pathogen, !!!rename_mapping)
+
 # Reorder factor levels by frequency 
 data_long$pathogen <- factor(data_long$pathogen, 
                              levels = names(sort(table(data_long$pathogen), 
                                                  decreasing = TRUE)))
+
 # Order dataframe by year
 data_long <- data_long[order(data_long$year), ]
-```
 
-Now, Let's look at the plot. 
-```{r}
 # Plot Outbreak Timeline
 ggplot(data_long, aes(x = year, y = pathogen, color = pathogen)) +
   geom_line(stat = "identity", size = 2) +
@@ -172,7 +188,9 @@ ggplot(data_long, aes(x = year, y = pathogen, color = pathogen)) +
         axis.title.x = element_blank())
 ```
 
-We will now add the outbreak plot onto the publication/policy plot. 
+We will now add the outbreak plot onto the publication/policy plot.
+
+This is the old plot (no disease y-axis with circle dot points)
 ```{r}
 #Because I had issues with creating the legend. I needed to convert the legend labels into a factor (for pathogens) then precompute the breaks 
 data_long$pathogen <- factor(data_long$pathogen)
@@ -199,19 +217,19 @@ ggplot(combined_df, aes(x = year)) +
     values = c(
       "Publication Count" = "blue",
       "Policy Citations" = "red",
-      "zika" = "lightpink",
-      "swine_flu_h1n1_pandemic" = "hotpink",
-      "severe_acute_respiratory_syndrome_sars_coronavirus" = "violet",
-      "russian_flu_pandemic_h1n1" = "mediumpurple1",
-      "m_pox" = "lightblue2",
-      "hong_kong_flu_pandemic_h3n2" = "azure",
-      "asian_flu_pandemic_h2n2" = "cyan4",
-      "mers" = "lightgreen",
-      "covid_19" = "mediumaquamarine",
-      "ebola" = "palegreen4",
-      "uptick_in_polio" = "maroon3",
-      "hiv_aids_pandemic" = "wheat1",
-      "cholera" = "lightsalmon"
+      "Zika" = "lightpink",
+      "H1N1 Swine" = "hotpink",
+      "SARS" = "violet",
+      "H1N1 Russian" = "mediumpurple1",
+      "MPox" = "lightblue2",
+      "H3N2 Hong Kong" = "azure",
+      "H2N2 Asian" = "cyan4",
+      "MERS" = "lightgreen",
+      "COVID-19" = "mediumaquamarine",
+      "Ebola" = "palegreen4",
+      "Polio" = "maroon3",
+      "HIV/AIDS" = "wheat1",
+      "Cholera" = "lightsalmon"
     ),
     breaks = pathogen_breaks
   ) +
@@ -238,3 +256,49 @@ ggplot(combined_df, aes(x = year)) +
   )
 
 ```
+This is the updated plot (January 23rd 2025)
+```{r}
+#Because I had issues with creating the legend. I needed to convert the legend labels into a factor (for pathogens) then precompute the breaks 
+data_long <- data_long %>%
+  mutate(outbreak_y = as.numeric(as.factor(pathogen)))  # Create a unique numeric value for each pathogen
+
+ggplot(combined_df, aes(x = year)) +
+  geom_line(aes(y = n_pub, color = "Publication Count"), size = 1) +
+  geom_line(aes(y = n_cit * 15, color = "Policy Citations"), size = 1) +
+  geom_tile(
+    data = data_long,
+    aes(x = year, y = outbreak_y * 300),
+    width = 1, height = 200,
+    fill = "grey", alpha = 0.5
+  ) +
+  # Add outbreak labels with fixed colors (excluded from legend with the inhereit.aes = FALSE)
+  geom_text(
+    data = data_long,
+    aes(x = min(combined_df$year) - 5, y = outbreak_y * 300, label = pathogen),
+    hjust = 1, size = 3, inherit.aes = FALSE,
+    color = "black"
+  ) +
+  # Scales and labels 
+  scale_y_continuous(
+    name = "Publication Count",
+    sec.axis = sec_axis(~ . / 15, name = "Policy Citations"),
+    expand = expansion(mult = c(0.1, 0.1))
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0.1, 0.1))) +
+  scale_color_manual(
+    values = c(
+      "Publication Count" = "blue",
+      "Policy Citations" = "red"
+    )
+  ) +
+  labs(x = "Year", color = "Legend", y = NULL) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.title.y.right = element_text(color = "black"),
+    axis.text.y.right = element_text(color = "black"),
+    panel.grid.major = element_line(color = "grey80", linewidth = 0.25),
+    panel.grid.minor = element_line(color = "grey90", linewidth = 0.25)
+  )
+```
+
