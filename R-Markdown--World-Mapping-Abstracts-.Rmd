@@ -48,7 +48,64 @@ To fix this, we need to manually map these locations. And these locations are ad
 
 ```{r}
 # Load new dataset with geolocations 
-abstracts_data <- read.csv("data/Combined_Location_With_Metadata.csv", stringsAsFactors = FALSE)
+abstracts_data <- read.csv("data/Combined_Location_With_Metadata_All.csv", stringsAsFactors = FALSE)
+
+# List of all countries (replace with a full list if needed)
+countries <- tolower(c(
+  "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda",
+  "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan", "Bahamas", "Bahrain",
+  "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", 
+  "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria",
+  "Burkina Faso", "Burundi", "Cabo Verde", "Cambodia", "Cameroon", "Canada",
+  "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", 
+  "Congo", "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czech Republic", "Denmark", 
+  "Djibouti", "Dominica", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", 
+  "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Fiji", 
+  "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", 
+  "Grenada", "Guatemala", "Guinea", "Guinea-Bissau", "Guyana", "Haiti", "Honduras", 
+  "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", 
+  "Italy", "Ivory Coast", "Côte d'Ivoire", "Jamaica", "Japan", "Jordan", 
+  "Kazakhstan", "Kenya", "Kiribati", "Korea", "Kosovo", "Kuwait", "Kyrgyzstan", 
+  "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", 
+  "Lithuania", "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Maldives", 
+  "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", 
+  "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", 
+  "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", 
+  "Nicaragua", "Niger", "Nigeria", "North Macedonia", "Norway", "Oman", "Pakistan", 
+  "Palau", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", 
+  "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Rwanda", 
+  "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent and the Grenadines", 
+  "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal", 
+  "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", 
+  "Solomon Islands", "Somalia", "South Africa", "Spain", "Sri Lanka", "Sudan", 
+  "Suriname", "Sweden", "Switzerland", "Syria", "Tajikistan", "Tanzania", 
+  "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", 
+  "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine", "United Arab Emirates", 
+  "United Kingdom", "UK", "Great Britain", "Britain", "England", "Scotland", 
+  "Wales", "Northern Ireland", "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City", 
+  "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe", 
+  "United States", "United States of America", "USA", "U.S.A.", "US", "U.S.", "Democratic Republic of the Congo", "DRC", "Congo-Kinshasa", "Congo (Democratic Republic)", "DR Congo", "République Démocratique du Congo (French variation)", "Congo, The Democratic Republic of"
+))
+
+# Function to extract and clean country names
+extract_countries <- function(location) {
+  if (is.na(location)) return(NA)
+  # Split the location string into parts and normalize
+  parts <- str_split(location, ",|;")[[1]] %>% 
+    str_trim() %>% 
+    tolower()
+  # Keep only parts that match country names
+  matched_countries <- parts[parts %in% countries]
+  if (length(matched_countries) > 0) {
+    return(paste(unique(str_to_title(matched_countries)), collapse = "; "))
+  } else {
+    return(NA)
+  }
+}
+
+# Apply the function to the location column
+abstracts_data <- abstracts_data %>%
+  mutate(location = sapply(location, extract_countries))
 
 # Define manual mappings only for ambiguous single locations
 manual_mapping <- list(
@@ -76,10 +133,10 @@ manual_mapping <- list(
 
 # Process `llm_location` column
 abstracts_data_clean <- abstracts_data %>%
-  filter(!is.na(llm_location) & llm_location != "") %>%  
-  separate_rows(llm_location, sep = ";\\s*") %>%         
+  filter(!is.na(location) & location != "") %>%  
+  separate_rows(location, sep = ";\\s*") %>%         
   mutate(
-    llm_location_resolved = recode(llm_location, !!!manual_mapping, .default = llm_location),
+    llm_location_resolved = recode(location, !!!manual_mapping, .default = location),
     Iso3 = ifelse(
       llm_location_resolved %in% c("BRA", "CAN", "CHE", "CHN", "EGY", "GBR", "IND", "LKA"), # Skip remapping for valid ISO3 codes
       llm_location_resolved,
@@ -127,7 +184,7 @@ ggplot() +
   geom_sf(data = world, fill = "grey90", color = "grey") +
   geom_sf(data = world_with_abstracts, aes(fill = n_abstracts_log), color = NA) +
   scale_fill_gradient(low = "lightblue", high = "darkblue", na.value = "grey90", 
-                      name = "Log Abstracts") +
+                      name = "Log of Abstracts") +
   theme_minimal() +
   theme(
     plot.title = element_text(face = "bold"),
@@ -137,7 +194,7 @@ ggplot() +
     legend.text = element_text(size = 8)
   ) +
   labs(
-    title = "Geographic Distribution of Abstracts",
+    title = "Geographic Distribution of Infectious Disease Modelling Literature",
     x = NULL, y = NULL
   )
 ```
