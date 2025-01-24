@@ -256,7 +256,7 @@ ggplot(combined_df, aes(x = year)) +
   )
 
 ```
-This is the updated plot (January 23rd 2025)
+This is the updated plot (January 22nd 2025) with rectangular bars instead of circular ones. 
 ```{r}
 #Because I had issues with creating the legend. I needed to convert the legend labels into a factor (for pathogens) then precompute the breaks 
 data_long <- data_long %>%
@@ -292,6 +292,112 @@ ggplot(combined_df, aes(x = year)) +
     )
   ) +
   labs(x = "Year", color = "Legend", y = NULL) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.title.y.right = element_text(color = "black"),
+    axis.text.y.right = element_text(color = "black"),
+    panel.grid.major = element_line(color = "grey80", linewidth = 0.25),
+    panel.grid.minor = element_line(color = "grey90", linewidth = 0.25)
+  )
+```
+This is annother updated plot (January 23rd 2025) with the bars being assigned with a specific colour. 
+```{r}
+data_long <- data_long %>%
+  mutate(outbreak_y = as.numeric(as.factor(pathogen)))  # Create a unique numeric value for each pathogen
+
+ggplot(combined_df, aes(x = year)) +
+  geom_line(aes(y = n_pub, color = "Publication Count"), size = 1) +
+  geom_line(aes(y = n_cit * 15, color = "Policy Citations"), size = 1) +
+  geom_tile(
+    data = data_long,
+    aes(x = year, y = outbreak_y * 300, fill = pathogen), 
+    width = 1, height = 200,
+    alpha = 0.5
+  ) +
+  geom_text(
+    data = data_long,
+    aes(x = min(combined_df$year) - 5, y = outbreak_y * 300, label = pathogen),
+    hjust = 1, size = 3, inherit.aes = FALSE,
+    color = "black"
+  ) +
+  scale_y_continuous(
+    name = "Publication Count",
+    sec.axis = sec_axis(~ . / 15, name = "Policy Citations"),
+    expand = expansion(mult = c(0.1, 0.1))
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0.1, 0.1))) +
+  scale_color_manual(
+    values = c(
+      "Publication Count" = "blue",
+      "Policy Citations" = "red"
+    )
+  ) +
+  scale_fill_viridis_d(name = "Pathogens", option = "plasma") + # This is where the Viridis color scale is applied
+  labs(x = "Year", color = "Legend", fill = "Outbreaks") +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.title.y.right = element_text(color = "black"),
+    axis.text.y.right = element_text(color = "black"),
+    panel.grid.major = element_line(color = "grey80", linewidth = 0.25),
+    panel.grid.minor = element_line(color = "grey90", linewidth = 0.25)
+  )
+```
+
+Updated Plot (Jan 24th): adding labels to the bars. 
+
+Issue here: the horizontal bars are made up of multiple individual rectangles. You cannot see it in the graph because it has been adjusted so that each rectangle is the same height and width. Therefore, what I have done is pass a code first the calculates the central y position and average x position of each "rectangle". So you must pass this code before plotting it. 
+```{r}
+# Making sure data is numeric 
+data_long <- data_long %>%
+  mutate(outbreak_y = as.numeric(as.factor(pathogen))) 
+
+# Calculate the central position for the labels
+centered_data <- data_long %>%
+  group_by(pathogen) %>%
+  summarise(
+    center_y = mean(outbreak_y * 300),  # This is the center of the horizontal bar
+    center_x = mean(year)              # This is the center x position (average year)
+  )
+
+# Plot with new  labels
+ggplot(combined_df, aes(x = year)) +
+  geom_line(aes(y = n_pub, color = "Publication Count"), size = 1) +
+  geom_line(aes(y = n_cit * 15, color = "Policy Citations"), size = 1) +
+  geom_tile(
+    data = data_long,
+    aes(x = year, y = outbreak_y * 300, fill = pathogen), 
+    width = 1, height = 200,
+    alpha = 0.5
+  ) +
+  geom_text(
+    data = centered_data,
+    aes(
+      x = center_x,          
+      y = center_y,          
+      label = pathogen
+    ),
+    vjust = 0.5,             
+    hjust = 0.5,             
+    size = 3,
+    inherit.aes = FALSE,
+    color = "black"
+  ) +
+  scale_y_continuous(
+    name = "Publication Count",
+    sec.axis = sec_axis(~ . / 15, name = "Policy Citations"),
+    expand = expansion(mult = c(0.1, 0.1))
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0.1, 0.1))) +
+  scale_color_manual(
+    values = c(
+      "Publication Count" = "blue",
+      "Policy Citations" = "red"
+    )
+  ) +
+  scale_fill_viridis_d(name = "Pathogens", option = "plasma") +
+  labs(x = "Year", color = "Legend", fill = "Outbreaks") +
   theme_minimal() +
   theme(
     legend.position = "bottom",
