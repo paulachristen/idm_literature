@@ -79,7 +79,7 @@ countries <- tolower(c(
   "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", 
   "Solomon Islands", "Somalia", "South Africa", "Spain", "Sri Lanka", "Sudan", 
   "Suriname", "Sweden", "Switzerland", "Syria", "Tajikistan", "Tanzania", 
-  "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", 
+  "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Trinidad & Tobago" , "Tunisia", 
   "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine", "United Arab Emirates", 
   "United Kingdom", "UK", "Great Britain", "Britain", "England", "Scotland", 
   "Wales", "Northern Ireland", "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City", 
@@ -110,6 +110,10 @@ abstracts_data <- abstracts_data %>%
 # Define manual mappings only for ambiguous single locations
 manual_mapping <- list(
   "England and Wales" = "GBR",
+  "UK" = "GBR",
+  "Great Britain" = "GBR",
+  "Britain" = "GBR",
+  "United Kingdom" = "GBR",
   "England & Wales" = "GBR",
   "Fayoum, Egypt" = "EGY",
   "New York metropolitan area" = "USA",
