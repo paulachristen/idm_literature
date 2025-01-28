@@ -20,7 +20,7 @@ library(janitor)
 First, we will read, clean, and save publication data. This is from Paula's original code 
 ```{r}
 # Get Publication data
-df <- read.csv("490k_141224_1234_dedup.csv") #Or change file path to wherever files are located
+df <- read.csv("data/490k_141224_1234_dedup.csv") #Or change file path to wherever files are located
 df <- clean_names(df)
 
 # Remove all excluded records
@@ -64,8 +64,38 @@ pc_subtype <- pc |>
                 rename(n_cit = n)
 
 write.csv(pc_subtype, 
-          "results/ec_aggregation_by_sub_type.csv", 
+          "plots/ec_aggregation_by_sub_type.csv", 
           row.names = FALSE)
+
+pc <- pc %>%
+  dplyr::filter(!is.na(published_on))
+
+# Join the summary data with the world map
+world_with_data <- world %>%
+  mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
+  left_join(pc, by = c("iso_a3" = "country_iso3"))
+
+world_with_data <- world_with_data %>%
+  dplyr::filter(!is.na(published_on))
+
+world_with_data$type.y <- factor(world_with_data$type.y, levels = c("government", "think tank", "other"))
+
+ggplot(world_with_data, aes(x = published_on, y = n_cit, fill = income_grp)) +
+  geom_bar(stat = "identity") +
+  scale_fill_viridis_d(option = "D", name = "Income Group") + # Use the discrete version of viridis
+  labs(
+    x = "Year", 
+    y = "Number of Infectious Disease Modelling \nCitations in Policy Documents"
+  ) + 
+  facet_grid(rows = vars(type.y)) + # Stack facets vertically based on type.y
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1) # Rotate x-axis text by 45 degrees
+  )
+
+ggsave("plots/by_income_group_type.png",
+       width = 14)
+
 ```
 
 Let's first plot the plots separately to see what we are working with. Still Paula's code. 
@@ -151,12 +181,12 @@ data_long <- data_long |> filter(year >= min(df_annual$year))
 # Renaming pathogens. This is done to help easier visualisation on the plot 
 rename_mapping <- c(
   "zika" = "Zika",
-  "swine_flu_h1n1_pandemic" = "H1N1 Swine",
+  "swine_flu_h1n1_pandemic" = "H1N1 Swine Flu",
   "severe_acute_respiratory_syndrome_sars_coronavirus" = "SARS",
-  "russian_flu_pandemic_h1n1" = "H1N1 Russian",
+  "russian_flu_pandemic_h1n1" = "H1N1 Russian Flu",
   "m_pox" = "MPox",
-  "hong_kong_flu_pandemic_h3n2" = "H3N2 Hong Kong",
-  "asian_flu_pandemic_h2n2" = "H2N2 Asian",
+  "hong_kong_flu_pandemic_h3n2" = "H3N2 Hong Kong Flu",
+  "asian_flu_pandemic_h2n2" = "H2N2 Asian Flu",
   "mers" = "MERS",
   "covid_19" = "COVID-19",
   "ebola" = "Ebola",
@@ -287,8 +317,8 @@ ggplot(combined_df, aes(x = year)) +
   scale_x_continuous(expand = expansion(mult = c(0.1, 0.1))) +
   scale_color_manual(
     values = c(
-      "Publication Count" = "blue",
-      "Policy Citations" = "red"
+      "Publication Count" = "#35B779FF",
+      "Policy Citations" = "#31688EFF"
     )
   ) +
   labs(x = "Year", color = "Legend", y = NULL) +
@@ -329,8 +359,8 @@ ggplot(combined_df, aes(x = year)) +
   scale_x_continuous(expand = expansion(mult = c(0.1, 0.1))) +
   scale_color_manual(
     values = c(
-      "Publication Count" = "blue",
-      "Policy Citations" = "red"
+      "Publication Count" = "#35B779FF",
+      "Policy Citations" = "#31688EFF"
     )
   ) +
   scale_fill_viridis_d(name = "Pathogens", option = "plasma") + # This is where the Viridis color scale is applied
@@ -353,6 +383,21 @@ Issue here: the horizontal bars are made up of multiple individual rectangles. Y
 data_long <- data_long %>%
   mutate(outbreak_y = as.numeric(as.factor(pathogen))) 
 
+data_long <- data_long %>%
+  mutate(
+    disease_characteristic = case_when(
+      pathogen %in% c("COVID-19", "SARS", "MERS", 
+                      "H1N1 Swine Flu", "H1N1 Russian Flu", 
+                      "H3N2 Hong Kong Flu", "H2N2 Asian Flu") ~ "Respiratory",
+      pathogen %in% c("Zika", "MPox", "Ebola") ~ "Vector-Borne/Zoonotic",
+      pathogen %in% c("HIV/AIDS", "MPox") ~ "STD",
+      pathogen %in% c("Cholera") ~ "Waterborne",
+      pathogen %in% c("Zika", "Polio") ~ "Neurological Impact",
+      pathogen %in% c("Ebola") ~ "Hemorrhagic",
+      TRUE ~ "Other" # Default category if none of the above match
+    )
+  )
+
 # Calculate the central position for the labels
 centered_data <- data_long %>%
   group_by(pathogen) %>%
@@ -361,13 +406,21 @@ centered_data <- data_long %>%
     center_x = mean(year)              # This is the center x position (average year)
   )
 
+centered_data$center_x <- ifelse(centered_data$pathogen == "Ebola", 2016.4, centered_data$center_x)
+
+ebola_add <- data.frame(pathogen = "Ebola",
+                        center_y = 1200,
+                        center_x = 2000)
+centered_data <- rbind(centered_data, ebola_add)
+
+
 # Plot with new  labels
 ggplot(combined_df, aes(x = year)) +
   geom_line(aes(y = n_pub, color = "Publication Count"), size = 1) +
   geom_line(aes(y = n_cit * 15, color = "Policy Citations"), size = 1) +
   geom_tile(
     data = data_long,
-    aes(x = year, y = outbreak_y * 300, fill = pathogen), 
+    aes(x = year, y = outbreak_y * 300, fill = disease_characteristic), 
     width = 1, height = 200,
     alpha = 0.5
   ) +
@@ -392,12 +445,12 @@ ggplot(combined_df, aes(x = year)) +
   scale_x_continuous(expand = expansion(mult = c(0.1, 0.1))) +
   scale_color_manual(
     values = c(
-      "Publication Count" = "blue",
-      "Policy Citations" = "red"
+      "Publication Count" = "#35B779FF",
+      "Policy Citations" = "#31688EFF"
     )
   ) +
-  scale_fill_viridis_d(name = "Pathogens", option = "plasma") +
-  labs(x = "Year", color = "Legend", fill = "Outbreaks") +
+  scale_fill_viridis_d(name = " ", option = "plasma") +
+  labs(x = "Year", color = " ", fill = "Outbreaks") +
   theme_minimal() +
   theme(
     legend.position = "bottom",
@@ -406,5 +459,7 @@ ggplot(combined_df, aes(x = year)) +
     panel.grid.major = element_line(color = "grey80", linewidth = 0.25),
     panel.grid.minor = element_line(color = "grey90", linewidth = 0.25)
   )
+
+ggsave("plots/timeline.png", width = 10)
 ```
 
