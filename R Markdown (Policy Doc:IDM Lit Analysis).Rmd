@@ -26,70 +26,34 @@ library("tidyr")
 Read the data
 ```{r}
 overton_data <- read.csv("data/overton_results_expanded.csv")
-idm_data <- read.csv("data/Combined_Location_With_Metadata.csv")
+idm_data <- read.csv("data/clean_idm_lit_with_locations.csv")
+
+overton_data <- overton_data[, !grepl("^X", names(overton_data))]
+idm_data <- idm_data[, !grepl("^X", names(idm_data))]
+
+```
+
+World Data
+```{r}
+# Get world data 
+world <- ne_countries(scale = "small", returnclass = "sf")
+world$iso_a3 <- ifelse(world$iso_a3 == "-99", 
+                       world$iso_a3_eh,
+                       world$iso_a3)
+
+world$iso_a3 <- ifelse(world$iso_a3 == "-99", 
+                       world$sov_a3,
+                       world$iso_a3)
+
+# Fix iso_a3 for France
+world <- world %>%
+  mutate(iso_a3 = ifelse(name == "France", "FRA", iso_a3))
+
 ```
 
 Before creating this R markdown, I ran the analysis by joining the datasets together then cross-referencing the dois and country location. This returned zero results. At first, I was puzzled, but then I realised it was because the countries might be spelt differently or be abbreviated. Therefore, before joining the datasets, I used the Iso3 country codes and standardised the country names across the data sets 
 
 Standardise IDM Data. This code is the same code used in the World Mapping Markdown.
-```{r}
-# Define manual mappings only for ambiguous single locations
-manual_mapping <- list(
-  "England and Wales" = "GBR",
-  "England & Wales" = "GBR",
-  "Fayoum, Egypt" = "EGY",
-  "New York metropolitan area" = "USA",
-  "Hebei Province, China" = "CHN",
-  "Brasilia, Brazil" = "BRA",
-  "Michigan, U.S.A.; New York City, U.S.A." = "USA",
-  "Edmonton, Alberta, Canada" = "CAN",
-  "South India" = "IND",
-  "sub-Saharan Africa" = "unmapped",  # Exclude broad regions
-  "southeastern United States" = "USA",
-  "Kalutara District; Sri Lanka" = "LKA",
-  "Lausanne" = "CHE",
-  "Britain" = "GBR",
-  "England, UK" = "GBR",
-  "U.S." = "USA",
-  "Mexico; Southern region of Mexico" = "MEX",
-  "Washington State" = "USA",
-  "Europe" = "unmapped",
-  "Kalutara District" = "LKA"
-)
-
-# Process `llm_location` column
-idm_data_clean <- idm_data %>%
-  filter(!is.na(llm_location) & llm_location != "") %>%  # Remove blanks/NA
-  separate_rows(llm_location, sep = ";\\s*") %>%         # Split multiple countries
-  mutate(
-    llm_location_resolved = recode(llm_location, !!!manual_mapping, .default = llm_location),
-    Iso3 = ifelse(
-      llm_location_resolved %in% c("BRA", "CAN", "CHE", "CHN", "EGY", "GBR", "IND", "LKA"), # Skip remapping for valid ISO3 codes
-      llm_location_resolved,
-      countrycode::countrycode(
-        sourcevar = llm_location_resolved,
-        origin = "country.name",
-        destination = "iso3c",
-        warn = FALSE  # Suppress warnings for unmatched values
-      )
-    )
-  ) %>%
-  mutate(Iso3 = ifelse(is.na(Iso3), "unmapped", Iso3))  
-
-# Add Status column to indicate whether a location is mapped or unmapped
-idm_data_clean <- idm_data_clean %>%
-  mutate(Status = ifelse(Iso3 == "unmapped", "Unmapped", "Mapped"))
-
-# Identify unmatched values for review
-unmatched <- idm_data_clean %>%
-  filter(Status == "Unmapped") %>%
-  distinct(llm_location_resolved) %>%
-  arrange(llm_location_resolved)
-
-# Print unmatched values for verification. This is to check and confirm that there hasn't been any countries missed. 
-print("Unmatched Values:")
-print(unmatched)
-```
 
 When trying to standarise the country codes for Overton data, I also realised that the new column it creates returns a value of NA if the country code is already written. Thus, I identified which country codes were already listed in the dataset and had to include the manual country mapping and ensure it doesn't pass as NA when doing country code mapping. 
 
@@ -121,11 +85,14 @@ Now, cross-reference the two datasets.
 ```{r}
 # Combine the datasets based on DOI and use the ISO3 country codes for comparison
 combined_data <- overton_data_clean %>%
-  inner_join(idm_data_clean, by = c("source_doi" = "doi"))
+  inner_join(idm_data, by = c("source_doi" = "doi"))
+
+combined_data <- combined_data[, !grepl("^X", names(combined_data))]
 
 # Filter where the policy document's country matches the IDM abstract's location
 matching_countries <- combined_data %>%
-  filter(country_iso3 == Iso3)
+  filter(country_iso3 == Iso3) %>%
+  filter(Status != "Unmapped")
 
 # Count the number of matches
 number_of_matches <- nrow(matching_countries)
@@ -133,18 +100,25 @@ number_of_matches <- nrow(matching_countries)
 # Print the result
 print(number_of_matches)
 
-#View the rows where the policy document's country matches the IDM literature's location (cleaned version for easier viewing)
-matching_countries_clean <- matching_countries %>%
-  select(total_citations, source_title, document_title, country, topics, title)
+# Summarize by Iso3 (count the number of abstracts per country)
+matching_countries_map <- matching_countries %>%
+  group_by(Iso3) %>%
+  summarize(count = n(), .groups = "drop") %>%
+  arrange(desc(count))
 
-matching_countries_clean %>%
-  head(10) %>%  # Show the first 10 rows (adjust as needed)
-  ggplot(aes(x = "", y = source_title, label = document_title)) +
-  geom_text() +
-  theme_void()
+# Join the summary data with the world map
+world_with_data <- world %>%
+  mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
+  left_join(matching_countries_map, by = c("iso_a3" = "Iso3"))
 
-knitr::kable(matching_countries_clean, caption = "Matching Countries")
+# Plot the world map
+ggplot(world_with_data) +
+  geom_sf(aes(fill = count)) +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey90", name = "Abstract Count") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
 
+ggsave("plots/citing_from_their_own_countries.jpg")
 ```
 
 # ***Part 2: Cross-Referencing Policy Documents and Abstracts (Different Country)*** 
@@ -153,7 +127,8 @@ Now, let's answer this question: how many policy documents cite IDM literature f
 ```{r}
 # Filter where the policy document cites IDM literature from a different country
 global_research_citations <- combined_data %>%
-  filter(country_iso3 != Iso3)
+  filter(country_iso3 != Iso3)  %>%
+  filter(Status != "Unmapped")
 
 # Count the number of matches
 num_global_citations <- nrow(global_research_citations)
@@ -161,13 +136,163 @@ num_global_citations <- nrow(global_research_citations)
 # Print the result
 print(num_global_citations)
 
-#View the rows where the policy document's country does not match the IDM literature's location (cleaned version for easier viewing)
-global_research_citations_clean <- global_research_citations %>%
-  select(total_citations, source_title, document_title, country, title, llm_location, Iso3)
-#print(global_research_citations_clean)
+# Summarize by Iso3 (count the number of abstracts per country)
+global_research_citations_map <- global_research_citations %>%
+  group_by(Iso3) %>%
+  summarize(count = n(), .groups = "drop") %>%
+  arrange(desc(count))
 
-knitr::kable(global_research_citations_clean, caption = "Global Research Citations")
+# Join the summary data with the world map
+world_with_data <- world %>%
+  mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
+  left_join(global_research_citations_map, by = c("iso_a3" = "Iso3"))
+
+# Plot the world map
+ggplot(world_with_data) +
+  geom_sf(aes(fill = count)) +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey90", name = "Abstract Count") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+ggsave("plots/citing_from_other_countries.jpg")
 ```
+
+# ***Part 3: Deviance between self-citing & other countries*** 
+
+Now, let's answer this question: what's the difference in citing national work versus citing foreign work?
+```{r}
+# Filter where the policy document cites IDM literature from a different country
+names(global_research_citations_map) <- c("Iso3", "count_foreign_citations")
+names(matching_countries_map) <- c("Iso3", "count_national_citations")
+
+combined_data_deviance <- merge(matching_countries_map, global_research_citations_map, by = "Iso3", all = TRUE)
+
+combined_data_deviance$diff <- combined_data_deviance$count_national_citations - combined_data_deviance$count_foreign_citations
+
+combined_data_deviance$ratio <- combined_data_deviance$count_national_citations/ combined_data_deviance$count_foreign_citations
+
+# Join the summary data with the world map
+world_with_data <- world %>%
+  mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
+  left_join(combined_data_deviance, by = c("iso_a3" = "Iso3"))
+
+# Plot the world map
+ggplot(world_with_data) +
+  geom_sf(aes(fill = diff)) +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey90", name = "Citations from foreign IDM vs. national IDM literature") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+ggsave("plots/citing_deviance.jpg")
+
+# Plot the world map
+ggplot(world_with_data) +
+  geom_sf(aes(fill = ratio)) +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey90", name = "Ratio of Citations from Foreign IDM to national IDM literature") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+ggsave("plots/citing_ratio.jpg")
+```
+
+```{r}
+
+# Convert the date column to Date format (optional but recommended)
+overton_data_clean$published_on <- as.Date(overton_data_clean$published_on)
+
+# Extract the year and overwrite the column
+overton_data_clean$published_on <- format(overton_data_clean$published_on, "%Y")
+
+pc <- overton_data_clean |>
+  group_by(published_on, country_iso3) |>
+  summarize(n = n()) |>
+  rename(n_cit = n)
+
+pc <- pc %>%
+  dplyr::filter(!is.na(published_on))
+
+# Join the summary data with the world map
+world_with_data <- world %>%
+  mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
+  left_join(pc, by = c("iso_a3" = "country_iso3"))
+
+world_with_data <- world_with_data %>%
+  dplyr::filter(!is.na(published_on))
+
+ggplot(world_with_data, aes(x = published_on, y = n_cit, fill = economy)) +
+  geom_bar(stat = "identity") +
+  scale_fill_viridis_d(option = "D", name = "Income Group") + # Use the discrete version of viridis
+  labs(x = "Year", y = "Number of Infectious Disease Modelling \nCitations in Policy Documents") + 
+  theme_minimal()
+
+ggsave("plots/by_economy.png",
+       width = 15)
+
+ggplot(world_with_data, aes(x = published_on, y = n_cit, fill = income_grp)) +
+  geom_bar(stat = "identity") +
+  scale_fill_viridis_d(option = "D", name = "Income Group") + # Use the discrete version of viridis
+  labs(x = "Year", y = "Number of Infectious Disease Modelling \nCitations in Policy Documents") + 
+  theme_minimal()
+
+
+ggsave("plots/by_income_group.png",
+       width = 15)
+
+
+```
+
+
+```{r}
+1 - length(unique(overton_data_clean$country))/195
+pc <- overton_data_clean |>
+  group_by(published_on, country_iso3, type) |>
+  summarize(n = n()) |>
+  rename(n_cit = n)
+
+pc <- pc %>%
+  dplyr::filter(!is.na(published_on))
+
+pc_igo <- pc %>% 
+  filter(type == "igo")
+
+pc_igo$income_grp <- "Not country-specific"
+
+names(pc_igo) <- c("published_on", "iso_a3", "type.y","n_cit","income_grp")
+
+# Join the summary data with the world map
+world_with_data <- world %>%
+  mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
+  left_join(pc, by = c("iso_a3" = "country_iso3"))
+
+world_with_data <- world_with_data[,c("published_on", "iso_a3", "type.y","n_cit","income_grp")]
+world_with_data <- st_drop_geometry(world_with_data)
+
+world_with_data <- bind_rows(world_with_data, pc_igo)
+
+world_with_data <- world_with_data %>%
+  dplyr::filter(!is.na(published_on))
+
+world_with_data$type.y <- factor(world_with_data$type.y, levels = c("government", "think tank", "igo","other"))
+
+ggplot(world_with_data, aes(x = published_on, y = n_cit, fill = income_grp)) +
+  geom_bar(stat = "identity") +
+  scale_fill_viridis_d(option = "D", name = "Income Group") + # Use the discrete version of viridis
+  labs(
+    x = "Year", 
+    y = "Number of Infectious Disease Modelling \nCitations in Policy Documents"
+  ) + 
+  facet_grid(rows = vars(type.y)) + # Stack facets vertically based on type.y
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1) # Rotate x-axis text by 45 degrees
+  )
+
+ggsave("plots/by_income_group_type.png",
+       width = 14)
+
+
+```
+
 
 # ***Part 3: Abstracts with 1+ countries *** 
 
