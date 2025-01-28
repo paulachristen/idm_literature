@@ -32,19 +32,17 @@ world$iso_a3 <- ifelse(world$iso_a3 == "-99",
                        world$sov_a3,
                        world$iso_a3)
 
-# Change map projection 
-world %>%
-  st_transform(crs = "+proj=wintri") %>%
-  ggplot() +
-  geom_sf() +
-  coord_sf(datum = NA) + # no graticule
-  theme_minimal()
+# Fix iso_a3 for France
+world <- world %>%
+  mutate(iso_a3 = ifelse(name == "France", "FRA", iso_a3))
 ```
 # ***Part 2: Identify Unmapped Locations***
 
 ```{r}
 # Load new dataset with geolocations. 
 abstracts_data_clean <- read.csv("data/Combined_Location_With_Metadata_All.csv", stringsAsFactors = FALSE)
+
+abstracts_data_clean <- abstracts_data_clean[, !grepl("^X", names(abstracts_data_clean))]
 
 # Process `location` column
 abstracts_data_clean <- abstracts_data_clean %>%
@@ -360,6 +358,92 @@ abstracts_data_new <- abstracts_data_clean %>%
       location %in% unmatched_nigeria$location ~ "NGA",
       location %in% unmatched_stp$location ~ "STP",
       location == "Chang Gung Memorial Hospital" ~ "TWN", 
+      
+      location == "Boston, Massachusetts" ~ "USA", 
+      location == "London, UK" ~ "GBR", 
+      location == "Sana'a, Yemen" ~ "YEM", 
+      location == "England" ~ "GBR", 
+      location == "Wales" ~ "GBR",
+      location == "England and Wales" ~ "GBR",
+      location == "Birmingham, UK" ~ "GBR",
+      location == "England, UK" ~ "GBR",
+      location == "Northumberland, UK" ~ "GBR",
+      
+      location == "Glasgow, Scotland" ~ "GBR",
+      location == "Central Lancashire, UK" ~ "GBR",
+      location == "Washington, D.C." ~ "USA",
+      location == "Michigan" ~ "USA",
+      
+      location == "Virginia, USA" ~ "USA",
+      location == "NHS England" ~ "GBR",
+      location == "Cabell County, West Virginia, USA" ~ "USA",
+      location == "Huntington, West Virginia, USA" ~ "USA",
+      
+      location == "Congo RDC" ~ "COD",
+      location == "Michigan, US" ~ "USA",
+      location == "Children's Clinical University Hospital" ~ "LVA",
+      location == "Virginia Commonwealth University, USA" ~ "USA",
+      
+      
+      location == "Rakai" ~ "UGA",
+      location == "Montgomery County, Virginia" ~ "USA",
+      location == "South of England" ~ "GBR",
+      location == "Montgomery County, Virginia, USA" ~ "USA",
+      
+      
+      location == "Utah" ~ "USA",
+      location == "Arizona" ~ "USA",
+      location == "Navajo Nation" ~ "USA",
+      location == "New York state, America" ~ "USA",
+      location == "Gezira state, Sudan" ~ "SDN",
+      location == "Chang Gung Memorial Hospital" ~ "TWN",
+      location == "North Wales, UK" ~ "GBR",
+      location == "Masaika" ~ "TZA",
+      location == "Dundee, UK" ~ "GBR",
+      location == "Plymouth, UK" ~ "GBR",
+      location == "Nottingham, UK" ~ "GBR",
+      location == "East London, UK" ~ "GBR",
+      location == "Bristol, UK" ~ "GBR",
+      location == "Wisconsin" ~ "USA",
+      location == "Northwest England" ~ "GBR",
+      location == "East Anglia, UK" ~ "GBR",
+      location == "Leicestershire, England" ~ "GBR",
+      location == "Eyam, Derbyshire, England" ~ "GBR",
+      location == "Greater Manchester, UK" ~ "GBR",
+      location == "Addenbrooke's Hospital, UK" ~ "GBR",
+      location == "Southern California" ~ "USA",
+      location == "Norway House, Manitoba, Canada" ~ "CAN",
+      location == "Pemba Island, Zanzibar" ~ "TZA",
+      location == "Stony Brook University Hospital, New York" ~ "USA",
+      
+      location == "Molise" ~ "ITA",
+      location == "Basilicata" ~ "ITA",
+      location == "Calabria" ~ "ITA",
+      location == "Abruzzo" ~ "ITA",
+      location == "Sicily" ~ "ITA",
+      location == "Apulia" ~ "ITA",
+      location == "Campania" ~ "ITA",
+      
+      
+      location == "Lazio" ~ "ITA",
+      location == "Tuscany" ~ "ITA",
+      location == "Emilia Romagna" ~ "ITA",
+      location == "Veneto" ~ "ITA",
+      location == "Piedmont" ~ "ITA",
+      location == "Honghu, China" ~ "CHN",
+      location == "Lombardia" ~ "ITA",
+      
+      
+      location == "Arizona, U.S." ~ "USA",
+      location == "Texas, U.S." ~ "USA",
+      location == "Colorado, U.S." ~ "USA",
+      location == "Charlottesville, Virginia, USA" ~ "USA",
+      location == "New York, U.S." ~ "USA",
+      location == "New Hampshire, U.S." ~ "USA",
+      location == "Taizhou Enze Medical Center (Group) Enze Hospital, China" ~ "CHN",
+      location == "Washington" ~ "USA",
+      location == "Dundee, Scotland" ~ "GBP",
+      location == "Taizhou Enze Medical Center (Group) Enze Hospital, China" ~ "CHN",
       location == "Czechoslovakia" ~ "NA",
       location == "former Czechoslovakia" ~ "NA",
       location == "Congo RDC" ~ "COD",
@@ -367,7 +451,9 @@ abstracts_data_new <- abstracts_data_clean %>%
       location == "Ferlo" ~ "SEN", 
       location == "Yugoslavia" ~ "SRB",  
       location == "San Juan, PR" ~ "PRI",  
-      location == "Omsk, Western Siberia" ~ "RUS",  
+      location == "Omsk, Western Siberia" ~ "RUS",
+      location == "Russian Federation" ~ "RUS", 
+      location == "Russia" ~ "RUS",
       location == "Nile Delta" ~ "EGY",  
       location == "Southwestern Vietnam" ~ "VNM",  
       location == "Southern Vietnam" ~ "VNM",
@@ -385,11 +471,20 @@ abstracts_data_new <- abstracts_data_clean %>%
       location == "Saxony" ~ "DEU",
       location == "Al-Bahrani" ~ "ARE",
       location == "D.Z.)" ~ "DZA",
+      location == " D.Z.)" ~ "DZA",
       location == "I.S." ~ "ISL",
+      location == "Transkei, Southeast Africa" ~ "ZAF",
+      location == "Tecumseh" ~ "CAN",
       location == "MS" ~ "MSR",
       location == "Haseki Research and Training" ~ "TUR",
       location == "Kruger National Park" ~ "ZAF",
+      location == "Volta River basin area" ~ "GHA",
+      location == "SLN Medical College and Hospital" ~ "IND",
+      location == "Oxford region" ~ "GBR",
       location == "Rakai" ~ "UGA",
+      location == "Kingwede, East Africa" ~ "KEN",
+      location == "Sun Yat-sen University Cancer Center" ~ "CHN",
+      location == " Al-Bahrani" ~ "ARE",
       location == "Clinic for Nephrology and Clinical Immunology of the Clinical Centre of Vojvodina" ~ "SRB",
       TRUE ~ countrycode::countrycode(
         sourcevar = location,
@@ -410,6 +505,7 @@ unmatched_new <- abstracts_data_new %>%
 # Print unmatched values for verification
 #print(unmatched_new)
 ```
+
 ```{r}
 # Identify newly matched values
 newly_matched <- abstracts_data_new %>%
@@ -419,20 +515,29 @@ newly_matched <- abstracts_data_new %>%
 # Preview the newly matched values
 #print(newly_matched)
 ```
-Now we have as many matched values as we could. We will now combine matched (from part 2) and newly_matched so that we can map everything onto the plot. 
+Now we have as many matched values as we could. We will now combine matched (from part 2) and newly_matched so that we can map everything onto the plot.
+
 ```{r}
 # Combine newly_matched with matched
 all_matched <- bind_rows(matched, newly_matched)
+```
+
+```{r}
+#these are all the abstracts which we don't map
+abstracts_data_clean_unmatched <- abstracts_data_new %>%
+  filter(Iso3 == "unmapped")
+
+write.csv(abstracts_data_new, "data/clean_idm_lit_with_locations.csv",row.names = FALSE)
+```
+
+
+```{r}
 
 # Summarize by Iso3 (count the number of abstracts per country)
-all_matched_summary <- all_matched %>%
+all_matched_summary <- abstracts_data_new %>%
   group_by(Iso3) %>%
   summarize(count = n(), .groups = "drop") %>%
   arrange(desc(count))
-
-# Fix iso_a3 for France
-world <- world %>%
-  mutate(iso_a3 = ifelse(name == "France", "FRA", iso_a3))
 
 # Join the summary data with the world map
 world_with_data <- world %>%
@@ -444,8 +549,9 @@ ggplot(world_with_data) +
   geom_sf(aes(fill = count)) +
   scale_fill_viridis_c(option = "plasma", na.value = "grey90", name = "Abstract Count") +
   theme_minimal() +
-  labs(
-    title = "Global Distribution of Abstract Locations",
-    subtitle = "Number of abstracts mapped by country"
-  )
+  theme(legend.position = "bottom")
+
+ggsave("plots/abstract_locations.jpg")
+
+
 ```
