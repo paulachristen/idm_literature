@@ -27,7 +27,7 @@ library(tidyr)
 
 ```{r}
 # Get Publication data -----------------------------------------------------
-data <- read.csv("490k_141224_1234_dedup.csv") #--> needs to be saved locally due to GitHub data upload limitations
+data <- read.csv("data/Combined_Location_With_Metadata_All.csv", stringsAsFactors = FALSE)
 data <- clean_names(data)
 ```
 
@@ -58,6 +58,27 @@ list(
     poisson_m2 = seg_model2$psi + min(data_counts$year),
     poisson_m3 = seg_model3$psi + min(data_counts$year)
 )
+
+#AIC
+# For seg_model1
+logLik1 <- logLik(seg_model1)
+k1 <- length(coefficients(seg_model1)) # Number of parameters
+aic1 <- -2 * as.numeric(logLik1) + 2 * k1
+
+# For seg_model2
+logLik2 <- logLik(seg_model2)
+k2 <- length(coefficients(seg_model2)) # Number of parameters
+aic2 <- -2 * as.numeric(logLik2) + 2 * k2
+
+# For seg_model3
+logLik3 <- logLik(seg_model3)
+k3 <- length(coefficients(seg_model3)) # Number of parameters
+aic3 <- -2 * as.numeric(logLik3) + 2 * k3
+
+# Display AIC values
+aic1
+aic2
+aic3
 ```
 
 ```{r}
