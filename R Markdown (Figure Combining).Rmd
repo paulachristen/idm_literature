@@ -71,30 +71,30 @@ pc <- pc %>%
   dplyr::filter(!is.na(published_on))
 
 # Join the summary data with the world map
-world_with_data <- world %>%
-  mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
-  left_join(pc, by = c("iso_a3" = "country_iso3"))
-
-world_with_data <- world_with_data %>%
-  dplyr::filter(!is.na(published_on))
-
-world_with_data$type.y <- factor(world_with_data$type.y, levels = c("government", "think tank", "other"))
-
-ggplot(world_with_data, aes(x = published_on, y = n_cit, fill = income_grp)) +
-  geom_bar(stat = "identity") +
-  scale_fill_viridis_d(option = "D", name = "Income Group") + # Use the discrete version of viridis
-  labs(
-    x = "Year", 
-    y = "Number of Infectious Disease Modelling \nCitations in Policy Documents"
-  ) + 
-  facet_grid(rows = vars(type.y)) + # Stack facets vertically based on type.y
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1) # Rotate x-axis text by 45 degrees
-  )
-
-ggsave("plots/by_income_group_type.png",
-       width = 14)
+# world_with_data <- world %>%
+#   mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
+#   left_join(pc, by = c("iso_a3" = "country_iso3"))
+# 
+# world_with_data <- world_with_data %>%
+#   dplyr::filter(!is.na(published_on))
+# 
+# world_with_data$type.y <- factor(world_with_data$type.y, levels = c("government", "think tank", "other"))
+# 
+# ggplot(world_with_data, aes(x = published_on, y = n_cit, fill = income_grp)) +
+#   geom_bar(stat = "identity") +
+#   scale_fill_viridis_d(option = "D", name = "Income Group") + # Use the discrete version of viridis
+#   labs(
+#     x = "Year", 
+#     y = "Number of Infectious Disease Modelling \nCitations in Policy Documents"
+#   ) + 
+#   facet_grid(rows = vars(type.y)) + # Stack facets vertically based on type.y
+#   theme_minimal() +
+#   theme(
+#     axis.text.x = element_text(angle = 45, hjust = 1) # Rotate x-axis text by 45 degrees
+#   )
+# 
+# ggsave("plots/by_income_group_type.png",
+#        width = 14)
 
 ```
 
@@ -383,6 +383,14 @@ Issue here: the horizontal bars are made up of multiple individual rectangles. Y
 data_long <- data_long %>%
   mutate(outbreak_y = as.numeric(as.factor(pathogen))) 
 
+first_appearance <- data_long %>%
+  group_by(pathogen) %>%
+  summarise(first_year = min(year)) %>%
+  arrange(first_year)
+
+# Apply new order to pathogen factor levels
+data_long$pathogen <- factor(data_long$pathogen, levels = first_appearance$pathogen)
+
 data_long <- data_long %>%
   mutate(
     disease_characteristic = case_when(
@@ -409,10 +417,11 @@ centered_data <- data_long %>%
 centered_data$center_x <- ifelse(centered_data$pathogen == "Ebola", 2016.4, centered_data$center_x)
 
 ebola_add <- data.frame(pathogen = "Ebola",
-                        center_y = 1200,
+                        center_y = 1800,
                         center_x = 2000)
 centered_data <- rbind(centered_data, ebola_add)
 
+centered_data$pathogen <- factor(centered_data$pathogen, levels = first_appearance$pathogen)
 
 # Plot with new  labels
 ggplot(combined_df, aes(x = year)) +
