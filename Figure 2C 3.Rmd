@@ -1,5 +1,5 @@
 ---
-title: "R Markdown (Policy Doc/IDM Lit Analysis )"
+title: "Figure 2C 3"
 author: "Emma Chapman-Banks"
 date: "2025-01-18"
 output: pdf_document
@@ -49,6 +49,63 @@ world$iso_a3 <- ifelse(world$iso_a3 == "-99",
 world <- world %>%
   mutate(iso_a3 = ifelse(name == "France", "FRA", iso_a3))
 
+# Define ISO 3 codes
+iso3_codes <- c("AND", "BHR", "COK", "COM", "CPV", "CUW", "FRO", "FSM", "GLP", "GUF", 
+                "GUM", "HKG", "IMN", "JEY", "LCA", "LIE", "MAC", "MDV", "MTQ", "MUS", 
+                "MYT", "NFK", "PYF", "REU", "SGP", "STP", "SYC", "unmapped", "VIR", 
+                "WSM")
+
+# Create a mapping for UN regions
+un_region_mapping <- list(
+  "Europe" = c("AND", "FRO", "IMN", "JEY", "LIE"),
+  "Asia" = c("BHR", "HKG", "MAC", "MDV", "SGP"),
+  "Oceania" = c("COK", "FSM", "GUM", "NFK", "PYF", "WSM"),
+  "Africa" = c("COM", "CPV", "MYT", "REU", "STP", "SYC", "MUS"),
+  "Americas" = c("CUW", "GLP", "GUF", "MTQ", "LCA", "VIR"),
+  "Antarctica" = character(0)  # No codes for Antarctica in this list
+)
+
+# Create a mapping for Income Group based on World Bank 2019 classification
+inc_group_mapping <- list(
+  "2. High income: nonOECD" = c("AND", "BHR", "CUW", "FRO", "GLP", "GUM", "HKG", "IMN", "JEY", 
+                    "LIE", "MAC", "MTQ", "MUS", "REU", "SGP"),
+  "3. Upper middle income" = c("CPV", "MDV", "STP", "SYC", "LCA"),
+  "4. Lower middle income" = c("COM", "FSM"),
+  "5. Low income" = character(0),  # No codes in this category
+  "Unmapped" = c("unmapped")
+)
+
+# Function to map values
+map_values <- function(code, mapping) {
+  match <- unlist(lapply(names(mapping), function(region) if (code %in% mapping[[region]]) region else NULL))
+  if (length(match) == 0) NA else match
+}
+
+# Create dataset
+df <- data.frame(
+  iso_a3 = iso3_codes,
+  region_un = sapply(iso3_codes, map_values, mapping = un_region_mapping),
+  income_grp = sapply(iso3_codes, map_values, mapping = inc_group_mapping),
+  stringsAsFactors = FALSE
+)
+
+# Define ISO 3 codes and country names
+iso3_names <- c(
+  "AND" = "Andorra", "BHR" = "Bahrain", "COK" = "Cook Islands", "COM" = "Comoros",
+  "CPV" = "Cape Verde", "CUW" = "Curaçao", "FRO" = "Faroe Islands", "FSM" = "Micronesia",
+  "GLP" = "Guadeloupe", "GUF" = "French Guiana", "GUM" = "Guam", "HKG" = "Hong Kong",
+  "IMN" = "Isle of Man", "JEY" = "Jersey", "LCA" = "Saint Lucia", "LIE" = "Liechtenstein",
+  "MAC" = "Macau", "MDV" = "Maldives", "MTQ" = "Martinique", "MUS" = "Mauritius",
+  "MYT" = "Mayotte", "NFK" = "Norfolk Island", "PYF" = "French Polynesia", "REU" = "Réunion",
+  "SGP" = "Singapore", "STP" = "São Tomé and Príncipe", "SYC" = "Seychelles",
+  "VIR" = "U.S. Virgin Islands", "WSM" = "Samoa", "unmapped" = NA
+)
+
+# Add country names to df
+df <- df %>%
+  mutate(admin = iso3_names[iso_a3])  # Match country names based on ISO 3 codes
+
+world <- bind_rows(world, df)
 ```
 
 Before creating this R markdown, I ran the analysis by joining the datasets together then cross-referencing the dois and country location. This returned zero results. At first, I was puzzled, but then I realised it was because the countries might be spelt differently or be abbreviated. Therefore, before joining the datasets, I used the Iso3 country codes and standardised the country names across the data sets 
@@ -188,7 +245,7 @@ ggsave("plots/citing_deviance.jpg")
 # Plot the world map
 ggplot(world_with_data) +
   geom_sf(aes(fill = ratio)) +
-  scale_fill_viridis_c(option = "plasma", na.value = "grey90", name = "Ratio of Citations from Foreign IDM to national IDM literature") +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey90", name = "Ratio of Citations from foreign IDM to domestic IDM literature") +
   theme_minimal() +
   theme(legend.position = "bottom")
 
@@ -293,32 +350,3 @@ ggsave("plots/by_income_group_type.png",
 
 ```
 
-
-# ***Part 3: Abstracts with 1+ countries *** 
-
-Now, let's look at how many papers covered 1 country, 2 countries or 3 countries. 
-```{r}
-# Step 1: Split the countries into separate rows
-idm_data_split <- idm_data_clean %>%
-  mutate(countries = strsplit(as.character(Iso3), ";")) %>%
-  unnest(Iso3) %>%
-  mutate(Iso3 = trimws(Iso3))  # Clean up extra spaces
-
-# Step 2: Count the number of countries per paper (group by paper ID)
-country_count <- idm_data_split %>%
-  group_by(doi) %>%  # Replace `paper_id` with the unique identifier for each paper
-  summarize(num_countries = n_distinct(Iso3))
-
-# Step 3: Count how many papers cover 1, 2, 3, etc., countries
-coverage_summary <- country_count %>%
-  count(num_countries)
-
-# Step 4: Rename columns for better readability
-coverage_summary <- coverage_summary %>%
-  rename(
-    `Number of Countries Covered` = num_countries,
-    `Paper Count` = n
-  )
-# Step 5: View results 
-print(coverage_summary)
-```

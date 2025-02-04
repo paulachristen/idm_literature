@@ -1,0 +1,244 @@
+---
+title: "Code for Figure 1: Timeline"
+author: "Emma Chapman-Banks"
+date: "2025-01-17"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# ***Part 1: Merging Figures 1 and 4***
+
+Load necessary packages
+```{r}
+library(ggplot2)
+library(dplyr)
+library(janitor)
+```
+
+- read, clean, and save publication data.
+```{r}
+# Get Publication data
+df <- read.csv("data/490k_141224_1234_dedup.csv") #Or change file path to wherever files are located
+df <- clean_names(df)
+
+# Remove all excluded records
+df <- df |>
+  filter(decision == "Include")
+
+# Calc publication records by year 
+df_annual <- df |>
+  group_by(year) |>
+  summarize(n = n()) |>
+  rename(n_pub = n)
+
+# Remove records prior to 1900 or after 2025 
+df_annual <- df_annual |>
+  filter(year < 2025) |>
+  filter(year > 1900)
+
+df_annual_save <- df_annual
+```
+
+- load in data for policy citations
+```{r}
+
+pc <- read.csv("data/overton_results_expanded.csv") 
+pc <- clean_names(pc)
+
+# Transform date of policy documents to year get year 
+pc$published_on <- as.Date(pc$published_on)
+pc$year <- format(as.Date(pc$published_on, format="%Y-%m/%d"),"%Y")
+
+# Calc policy citations by year 
+pc_annual <- pc |>
+  group_by(year) |>
+  summarize(n = n()) |>
+  rename(n_cit = n)
+
+# Calc policy citations by org type and subtype
+pc_subtype <- pc |>
+                group_by(type, subtype) |>
+                summarize(n = n()) |>
+                rename(n_cit = n)
+
+write.csv(pc_subtype, 
+          "plots/ec_aggregation_by_sub_type.csv", 
+          row.names = FALSE)
+
+pc <- pc %>%
+  dplyr::filter(!is.na(published_on))
+```
+
+
+- pc_annual starts from 1989 and df_annual starts from 1948. This can create issues when merging so we must align the data ranges to ensure RStudio can read this correctly. 
+```{r}
+# Merge datasets, keeping all years from df_annual
+combined_df <- merge(df_annual, pc_annual, by = "year", all.x = TRUE)
+
+# Replace missing policy citation values (n_cit) with 0 (as pc_annual doesn't begin until 1989)
+combined_df$n_cit[is.na(combined_df$n_cit)] <- 0
+
+# Ensure n_pub is numeric
+combined_df$n_pub <- as.numeric(combined_df$n_pub)
+```
+
+# ***Part 2: Merging all three plots together***
+
+Now, we will "superimpose" the publication count/policy citations with the outbreak timeline. 
+
+But first, lets load the outbreak timeline data (Paula's code)
+
+```{r}
+# Get Outbreaks timeline data 
+e_timeline <- readxl::read_excel("data/Epidemics Timeline.xlsx", 
+                                 sheet = 2)
+names(e_timeline)[1] <- c("year")
+e_timeline <- clean_names(e_timeline)
+
+# Reshape data to long format for ggplot2 
+data_long <- tidyr::pivot_longer(e_timeline, 
+                                 -year, 
+                                 names_to = "pathogen", 
+                                 values_to = "presence")
+data_long <- data_long |> filter(presence > 0)
+data_long <- data_long |> filter(year >= min(df_annual$year))
+
+# Renaming pathogens. This is done to help easier visualisation on the plot 
+rename_mapping <- c(
+  "zika" = "Zika",
+  "swine_flu_h1n1_pandemic" = "H1N1 Swine Flu",
+  "severe_acute_respiratory_syndrome_sars_coronavirus" = "SARS",
+  "russian_flu_pandemic_h1n1" = "H1N1 Russian Flu",
+  "m_pox" = "MPox",
+  "hong_kong_flu_pandemic_h3n2" = "H3N2 Hong Kong Flu",
+  "asian_flu_pandemic_h2n2" = "H2N2 Asian Flu",
+  "mers" = "MERS",
+  "covid_19" = "COVID-19",
+  "ebola" = "Ebola",
+  "uptick_in_polio" = "Polio",
+  "hiv_aids_pandemic" = "HIV/AIDS",
+  "cholera" = "Cholera"
+)
+
+data_long$pathogen <- dplyr::recode(data_long$pathogen, !!!rename_mapping)
+
+# Reorder factor levels by frequency 
+data_long$pathogen <- factor(data_long$pathogen, 
+                             levels = names(sort(table(data_long$pathogen), 
+                                                 decreasing = TRUE)))
+
+# Order dataframe by year
+data_long <- data_long[order(data_long$year), ]
+```
+
+We will now add the outbreak plot onto the publication/policy plot.
+
+This is the old plot (no disease y-axis with circle dot points)
+```{r}
+#Because I had issues with creating the legend. I needed to convert the legend labels into a factor (for pathogens) then precompute the breaks 
+data_long$pathogen <- factor(data_long$pathogen)
+pathogen_breaks <- c("Publication Count", "Policy Citations", levels(data_long$pathogen))
+
+```
+
+
+Updated Plot (Jan 24th): adding labels to the bars. 
+
+Issue here: the horizontal bars are made up of multiple individual rectangles. You cannot see it in the graph because it has been adjusted so that each rectangle is the same height and width. Therefore, what I have done is pass a code first the calculates the central y position and average x position of each "rectangle". So you must pass this code before plotting it. 
+```{r}
+# Making sure data is numeric 
+data_long <- data_long %>%
+  mutate(outbreak_y = as.numeric(as.factor(pathogen))) 
+
+first_appearance <- data_long %>%
+  group_by(pathogen) %>%
+  summarise(first_year = min(year)) %>%
+  arrange(first_year)
+
+# Apply new order to pathogen factor levels
+data_long$pathogen <- factor(data_long$pathogen, levels = first_appearance$pathogen)
+
+data_long <- data_long %>%
+  mutate(
+    disease_characteristic = case_when(
+      pathogen %in% c("COVID-19", "SARS", "MERS", 
+                      "H1N1 Swine Flu", "H1N1 Russian Flu", 
+                      "H3N2 Hong Kong Flu", "H2N2 Asian Flu") ~ "Respiratory",
+      pathogen %in% c("Zika", "MPox", "Ebola") ~ "Vector-Borne/Zoonotic",
+      pathogen %in% c("HIV/AIDS", "MPox") ~ "STD",
+      pathogen %in% c("Cholera") ~ "Waterborne",
+      pathogen %in% c("Zika", "Polio") ~ "Neurological Impact",
+      pathogen %in% c("Ebola") ~ "Hemorrhagic",
+      TRUE ~ "Other" # Default category if none of the above match
+    )
+  )
+
+# Calculate the central position for the labels
+centered_data <- data_long %>%
+  group_by(pathogen) %>%
+  summarise(
+    center_y = mean(outbreak_y * 300),  # This is the center of the horizontal bar
+    center_x = mean(year)              # This is the center x position (average year)
+  )
+
+centered_data$center_x <- ifelse(centered_data$pathogen == "Ebola", 2016.4, centered_data$center_x)
+
+ebola_add <- data.frame(pathogen = "Ebola",
+                        center_y = 1800,
+                        center_x = 2000)
+centered_data <- rbind(centered_data, ebola_add)
+
+centered_data$pathogen <- factor(centered_data$pathogen, levels = first_appearance$pathogen)
+
+# Plot with new  labels
+ggplot(combined_df, aes(x = year)) +
+  geom_line(aes(y = n_pub, color = "Publication Count"), size = 1) +
+  geom_line(aes(y = n_cit * 15, color = "Policy Citations"), size = 1) +
+  geom_tile(
+    data = data_long,
+    aes(x = year, y = outbreak_y * 300, fill = disease_characteristic), 
+    width = 1, height = 200,
+    alpha = 0.5
+  ) +
+  geom_text(
+    data = centered_data,
+    aes(
+      x = center_x,          
+      y = center_y,          
+      label = pathogen
+    ),
+    vjust = 0.5,             
+    hjust = 0.5,             
+    size = 3,
+    inherit.aes = FALSE,
+    color = "black"
+  ) +
+  scale_y_continuous(
+    name = "Publication Count",
+    sec.axis = sec_axis(~ . / 15, name = "Policy Citations"),
+    expand = expansion(mult = c(0.1, 0.1))
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0.1, 0.1))) +
+  scale_color_manual(
+    values = c(
+      "Publication Count" = "#35B779FF",
+      "Policy Citations" = "#31688EFF"
+    )
+  ) +
+  scale_fill_viridis_d(name = " ", option = "plasma") +
+  labs(x = "Year", color = " ", fill = "Outbreaks") +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.title.y.right = element_text(color = "black"),
+    axis.text.y.right = element_text(color = "black"),
+    panel.grid.major = element_line(color = "grey80", linewidth = 0.25),
+    panel.grid.minor = element_line(color = "grey90", linewidth = 0.25)
+  )
+
+ggsave("plots/timeline.png", width = 10)
+```
+
+

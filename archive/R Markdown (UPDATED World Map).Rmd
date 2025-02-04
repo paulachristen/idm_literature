@@ -36,6 +36,68 @@ world$iso_a3 <- ifelse(world$iso_a3 == "-99",
 world <- world %>%
   mutate(iso_a3 = ifelse(name == "France", "FRA", iso_a3))
 ```
+
+```{r}
+
+# Define ISO 3 codes
+iso3_codes <- c("AND", "BHR", "COK", "COM", "CPV", "CUW", "FRO", "FSM", "GLP", "GUF", 
+                "GUM", "HKG", "IMN", "JEY", "LCA", "LIE", "MAC", "MDV", "MTQ", "MUS", 
+                "MYT", "NFK", "PYF", "REU", "SGP", "STP", "SYC", "unmapped", "VIR", 
+                "WSM")
+
+# Create a mapping for UN regions
+un_region_mapping <- list(
+  "Europe" = c("AND", "FRO", "IMN", "JEY", "LIE"),
+  "Asia" = c("BHR", "HKG", "MAC", "MDV", "SGP"),
+  "Oceania" = c("COK", "FSM", "GUM", "NFK", "PYF", "WSM"),
+  "Africa" = c("COM", "CPV", "MYT", "REU", "STP", "SYC", "MUS"),
+  "Americas" = c("CUW", "GLP", "GUF", "MTQ", "LCA", "VIR"),
+  "Antarctica" = character(0)  # No codes for Antarctica in this list
+)
+
+# Create a mapping for Income Group based on World Bank 2019 classification
+inc_group_mapping <- list(
+  "2. High income: nonOECD" = c("AND", "BHR", "CUW", "FRO", "GLP", "GUM", "HKG", "IMN", "JEY", 
+                    "LIE", "MAC", "MTQ", "MUS", "REU", "SGP"),
+  "3. Upper middle income" = c("CPV", "MDV", "STP", "SYC", "LCA"),
+  "4. Lower middle income" = c("COM", "FSM"),
+  "5. Low income" = character(0),  # No codes in this category
+  "Unmapped" = c("unmapped")
+)
+
+# Function to map values
+map_values <- function(code, mapping) {
+  match <- unlist(lapply(names(mapping), function(region) if (code %in% mapping[[region]]) region else NULL))
+  if (length(match) == 0) NA else match
+}
+
+# Create dataset
+df <- data.frame(
+  iso_a3 = iso3_codes,
+  region_un = sapply(iso3_codes, map_values, mapping = un_region_mapping),
+  income_grp = sapply(iso3_codes, map_values, mapping = inc_group_mapping),
+  stringsAsFactors = FALSE
+)
+
+# Define ISO 3 codes and country names
+iso3_names <- c(
+  "AND" = "Andorra", "BHR" = "Bahrain", "COK" = "Cook Islands", "COM" = "Comoros",
+  "CPV" = "Cape Verde", "CUW" = "Curaçao", "FRO" = "Faroe Islands", "FSM" = "Micronesia",
+  "GLP" = "Guadeloupe", "GUF" = "French Guiana", "GUM" = "Guam", "HKG" = "Hong Kong",
+  "IMN" = "Isle of Man", "JEY" = "Jersey", "LCA" = "Saint Lucia", "LIE" = "Liechtenstein",
+  "MAC" = "Macau", "MDV" = "Maldives", "MTQ" = "Martinique", "MUS" = "Mauritius",
+  "MYT" = "Mayotte", "NFK" = "Norfolk Island", "PYF" = "French Polynesia", "REU" = "Réunion",
+  "SGP" = "Singapore", "STP" = "São Tomé and Príncipe", "SYC" = "Seychelles",
+  "VIR" = "U.S. Virgin Islands", "WSM" = "Samoa", "unmapped" = NA
+)
+
+# Add country names to df
+df <- df %>%
+  mutate(admin = iso3_names[iso_a3])  # Match country names based on ISO 3 codes
+
+world <- bind_rows(world, df)
+```
+
 # ***Part 2: Identify Unmapped Locations***
 
 ```{r}
@@ -530,6 +592,59 @@ abstracts_data_clean_unmatched <- abstracts_data_new %>%
 write.csv(abstracts_data_new, "data/clean_idm_lit_with_locations.csv",row.names = FALSE)
 ```
 
+```{r}
+#Plot by region
+
+bar_plot <- merge(abstracts_data_new, world[,c("iso_a3","admin","region_un")], by.x = "Iso3",by.y = "iso_a3", all.x = TRUE)
+
+bar_plot$geo_plot_temp <- ifelse(is.na(bar_plot$region_un),bar_plot$location,bar_plot$region_un)
+
+# Define a lookup vector
+lookup <- c("Europe", "Africa", "America", "Asia", "Oceania", "Antarctica")
+
+# Apply replacement
+bar_plot <- bar_plot %>%
+  mutate(geo_plot_temp = str_extract(geo_plot_temp, paste(lookup, collapse = "|")),
+         geo_plot_temp = ifelse(is.na(geo_plot_temp), NA, geo_plot_temp))
+
+bar_plot <- bar_plot %>%
+  mutate(geo_plot_temp = case_when(
+    location == "EU" ~ "Europe",
+    location == "Scandinavia" ~ "Europe",
+    location == "EU/EEA" ~ "Europe",
+    location == "Tanzania-Kenya" ~ "Africa",
+    location == "Saxon-Czech border region" ~ "Europe",
+    location == "Iberian Peninsula" ~ "Europe",
+    location == "Global" ~ "Global",
+    str_detect(location, "countries") ~ "Global",  # If "countries" is in the text
+
+    TRUE ~ geo_plot_temp  # Keep existing values if no match
+  ))
+
+# Summarize by Iso3 (count the number of abstracts per country)
+bar_plot_df <- bar_plot %>%
+  group_by(geo_plot_temp) %>%
+  summarize(count = n(), .groups = "drop") %>%
+  arrange(desc(count))
+
+bar_plot_df$geo_plot_temp <- ifelse(is.na(bar_plot_df$geo_plot_temp), "Region not\nrecognized",bar_plot_df$geo_plot_temp )
+
+library(viridis)
+bar_plot_df <- bar_plot_df %>%
+  mutate(percentage = count / sum(count) * 100,
+         label = paste0(count, " (", round(percentage, 1), "%)"))  # Format count + %
+
+# Create a ggplot bar chart with percentage labels
+ggplot(bar_plot_df, aes(x = reorder(geo_plot_temp, -count), y = count, fill = geo_plot_temp)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = label), vjust = -0.5, size = 3) +  # Add text above bars
+  scale_fill_viridis(discrete = TRUE, option = "D") +  # Use Viridis palette
+  labs(title = "", x = "Region", y = "Count of publications") +
+  theme_minimal() +
+  theme(legend.position = "none")  # Hide legend since colors match labels
+
+ggsave("plots/regional_distribution.png", width = 6, height = 5)
+```
 
 ```{r}
 
@@ -544,10 +659,14 @@ world_with_data <- world %>%
   mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
   left_join(all_matched_summary, by = c("iso_a3" = "Iso3"))
 
+# Apply logarithmic transformation ----------------------------------------
+world_with_data <- world_with_data %>%
+  mutate(n_cit_log = log1p(count))  # log1p ensures log(0) is handled (log(0) = -Inf)
+
 # Plot the world map
 ggplot(world_with_data) +
-  geom_sf(aes(fill = count)) +
-  scale_fill_viridis_c(option = "plasma", na.value = "grey90", name = "Abstract Count") +
+  geom_sf(aes(fill = n_cit_log)) +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey90", name = "Log of Abstract Count") +
   theme_minimal() +
   theme(legend.position = "bottom")
 

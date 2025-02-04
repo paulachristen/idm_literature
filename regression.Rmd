@@ -36,13 +36,14 @@ data2 <- data %>%
     dplyr::select(year, title, decision) %>%
     filter(year>=1980 & year<=2024) 
 
+data2$year <- as.numeric(data2$year)
 data_counts <- data2 %>%
     filter(decision == "Include") %>%
     count(year) %>%
   mutate(t_year = year - min(year))
 ```
 
-```{r pressure, echo=FALSE}
+```{r}
 # Look for changepoints using piecewise poisson regression
 poisson_m <- glm(n ~ 
           t_year,
@@ -100,6 +101,97 @@ ggplot(model_fits_long, aes(x = year)) +
   geom_line(aes(y = fitted_n, color = model), linewidth = 1) +  # Fitted lines
   facet_wrap(~ model, scales = "free_y") +  # Create a facet for each model
   labs(x = "Year", y = "Number of articles") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
+
+```{r}
+# Get Publication Citation data ------------------------------------------------
+
+overton_data <- read.csv("data/overton_results_expanded.csv")
+
+# Extract the year and overwrite the column
+overton_data$published_on <- as.Date(overton_data$published_on)
+overton_data$published_on <- format(overton_data$published_on, "%Y")
+
+pc <- overton_data |>
+  group_by(published_on) |>
+  summarize(n = n()) |>
+  rename(n_cit = n)
+
+pc <- pc %>% 
+    dplyr::select(published_on, n_cit) %>%
+    filter(published_on>=2003 & published_on<=2024) 
+
+pc <- pc %>% filter(!is.na(published_on))
+
+pc$published_on <- as.numeric(pc$published_on)
+data_counts <- pc %>%
+  mutate(t_year = published_on - min(published_on))
+```
+
+
+```{r}
+# Look for changepoints using piecewise poisson regression
+poisson_m <- glm(n_cit ~ 
+          t_year,
+          data = data_counts, 
+          family = poisson(link = "log"))
+
+seg_model1 <- segmented(poisson_m, seg.Z = ~t_year, psi = list(t_year = median(data_counts$t_year)))
+seg_model2 <- segmented(poisson_m, seg.Z = ~t_year, psi = list(t_year = c(median(data_counts$t_year) - 2, median(data_counts$t_year) + 2)))
+seg_model3 <- segmented(poisson_m, seg.Z = ~t_year, psi = list(t_year = c(median(data_counts$t_year) - 3, median(data_counts$t_year), median(data_counts$t_year) + 3)))
+
+list(
+    poisson_m1 = seg_model1$psi + min(data_counts$year),
+    poisson_m2 = seg_model2$psi + min(data_counts$year),
+    poisson_m3 = seg_model3$psi + min(data_counts$year)
+)
+
+#AIC
+# For seg_model1
+logLik1 <- logLik(seg_model1)
+k1 <- length(coefficients(seg_model1)) # Number of parameters
+aic1 <- -2 * as.numeric(logLik1) + 2 * k1
+
+# For seg_model2
+logLik2 <- logLik(seg_model2)
+k2 <- length(coefficients(seg_model2)) # Number of parameters
+aic2 <- -2 * as.numeric(logLik2) + 2 * k2
+
+# For seg_model3
+logLik3 <- logLik(seg_model3)
+k3 <- length(coefficients(seg_model3)) # Number of parameters
+aic3 <- -2 * as.numeric(logLik3) + 2 * k3
+
+# Display AIC values
+aic1
+aic2
+aic3
+
+```
+
+```{r}
+model_fits <- tibble(
+  year = data_counts$published_on,
+  n = data_counts$n_cit,
+  seg_poisson_model1_fit = predict(seg_model1) %>% exp,
+  seg_poisson_model2_fit = predict(seg_model2) %>% exp,
+  seg_poisson_model3_fit = predict(seg_model3) %>% exp
+)
+
+model_fits_long <- model_fits %>%
+  tidyr::pivot_longer(cols = starts_with("seg_"), 
+               names_to = "model", 
+               values_to = "fitted_n")
+
+ggplot(model_fits_long, aes(x = year)) +
+  geom_point(data = data_counts, aes(x = published_on, y = n_cit), color = "black") +  # Data points
+  geom_line(aes(y = fitted_n, color = model), linewidth = 1) +  # Fitted lines
+  facet_wrap(~ model, scales = "free_y") +  # Create a facet for each model
+  labs(x = "Year", y = "Number of citations") +
   theme_minimal() +
   theme(legend.position = "none")
 

@@ -1,21 +1,21 @@
-"type","subtype","n_cit"
-"government","",377
-"government","academy",3
-"government","agency",76
-"government","bank",7
-"government","city",5
-"government","food and drug safety",21
-"government","healthcare agency",177
-"government","legislative research",7
-"government","research center",22
-"government","technology assessment",1
-"igo","",92
-"igo","development bank",62
-"igo","healthcare agency",212
-"igo","research center",2
-"other","aggregator",85
-"think tank","",139
-"think tank","consultancy",4
-"think tank","industry association",1
-"think tank","research center",30
-"think tank","university affiliated",14
+Type,Sub-type,Number of citations,Percentage
+government,,377,28%
+government,academy,3,0%
+government,agency,76,6%
+government,bank,7,1%
+government,city,5,0%
+government,food and drug safety,21,2%
+government,healthcare agency,177,13%
+government,legislative research,7,1%
+government,research center,22,2%
+government,technology assessment,1,0%
+igo,,92,7%
+igo,development bank,62,5%
+igo,healthcare agency,212,16%
+igo,research center,2,0%
+other,aggregator,85,6%
+think tank,,139,10%
+think tank,consultancy,4,0%
+think tank,industry association,1,0%
+think tank,research center,30,2%
+think tank,university affiliated,14,1%
