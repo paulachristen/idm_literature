@@ -15,12 +15,13 @@ Load necessary packages
 library(ggplot2)
 library(dplyr)
 library(janitor)
+library(ggsci)
 ```
 
 - read, clean, and save publication data.
 ```{r}
 # Get Publication data
-df <- read.csv("data/490k_141224_1234_dedup.csv") #Or change file path to wherever files are located
+df <- read.csv("~/Google Drive/My Drive/HITAP/IDM Literature/analysis/data/data/490k_141224_1234_dedup.csv") #Or change file path to wherever files are located
 df <- clean_names(df)
 
 # Remove all excluded records
@@ -44,7 +45,7 @@ df_annual_save <- df_annual
 - load in data for policy citations
 ```{r}
 
-pc <- read.csv("data/overton_results_expanded.csv") 
+pc <- read.csv("~/Google Drive/My Drive/HITAP/IDM Literature/analysis/data/data/overton_results_expanded.csv") 
 pc <- clean_names(pc)
 
 # Transform date of policy documents to year get year 
@@ -110,7 +111,7 @@ rename_mapping <- c(
   "zika" = "Zika",
   "swine_flu_h1n1_pandemic" = "H1N1 Swine Flu",
   "severe_acute_respiratory_syndrome_sars_coronavirus" = "SARS",
-  "russian_flu_pandemic_h1n1" = "H1N1 Russian Flu",
+  "h1n1_russian_flu" = "H1N1 Russian Flu",
   "m_pox" = "MPox",
   "hong_kong_flu_pandemic_h3n2" = "H3N2 Hong Kong Flu",
   "asian_flu_pandemic_h2n2" = "H2N2 Asian Flu",
@@ -118,8 +119,7 @@ rename_mapping <- c(
   "covid_19" = "COVID-19",
   "ebola" = "Ebola",
   "uptick_in_polio" = "Polio",
-  "hiv_aids_pandemic" = "HIV/AIDS",
-  "cholera" = "Cholera"
+  "hiv_aids_pandemic" = "HIV/AIDS"
 )
 
 data_long$pathogen <- dplyr::recode(data_long$pathogen, !!!rename_mapping)
@@ -157,23 +157,10 @@ first_appearance <- data_long %>%
   summarise(first_year = min(year)) %>%
   arrange(first_year)
 
-# Apply new order to pathogen factor levels
-data_long$pathogen <- factor(data_long$pathogen, levels = first_appearance$pathogen)
-
+# Re-level the pathogen factor in data_long and then create outbreak_y
 data_long <- data_long %>%
-  mutate(
-    disease_characteristic = case_when(
-      pathogen %in% c("COVID-19", "SARS", "MERS", 
-                      "H1N1 Swine Flu", "H1N1 Russian Flu", 
-                      "H3N2 Hong Kong Flu", "H2N2 Asian Flu") ~ "Respiratory",
-      pathogen %in% c("Zika", "MPox", "Ebola") ~ "Vector-Borne/Zoonotic",
-      pathogen %in% c("HIV/AIDS", "MPox") ~ "STD",
-      pathogen %in% c("Cholera") ~ "Waterborne",
-      pathogen %in% c("Zika", "Polio") ~ "Neurological Impact",
-      pathogen %in% c("Ebola") ~ "Hemorrhagic",
-      TRUE ~ "Other" # Default category if none of the above match
-    )
-  )
+  mutate(pathogen = factor(pathogen, levels = first_appearance$pathogen),
+         outbreak_y = as.numeric(pathogen))
 
 # Calculate the central position for the labels
 centered_data <- data_long %>%
@@ -186,21 +173,24 @@ centered_data <- data_long %>%
 centered_data$center_x <- ifelse(centered_data$pathogen == "Ebola", 2016.4, centered_data$center_x)
 
 ebola_add <- data.frame(pathogen = "Ebola",
-                        center_y = 1800,
+                        center_y = 1500,
                         center_x = 2000)
 centered_data <- rbind(centered_data, ebola_add)
+```
 
-centered_data$pathogen <- factor(centered_data$pathogen, levels = first_appearance$pathogen)
+```{r}
 
-# Plot with new  labels
+
+
 ggplot(combined_df, aes(x = year)) +
   geom_line(aes(y = n_pub, color = "Publication Count"), size = 1) +
   geom_line(aes(y = n_cit * 15, color = "Policy Citations"), size = 1) +
   geom_tile(
     data = data_long,
-    aes(x = year, y = outbreak_y * 300, fill = disease_characteristic), 
+    aes(x = year, y = outbreak_y * 300),  # No fill mapping, just a fixed color
+    fill = "lightgrey", 
     width = 1, height = 200,
-    alpha = 0.5
+    alpha = 0.3
   ) +
   geom_text(
     data = centered_data,
@@ -215,20 +205,21 @@ ggplot(combined_df, aes(x = year)) +
     inherit.aes = FALSE,
     color = "black"
   ) +
+  geom_vline(xintercept = c(1989, 2018, 2021), linetype = "dashed", color = "darkgrey", size = 1) +
   scale_y_continuous(
     name = "Publication Count",
     sec.axis = sec_axis(~ . / 15, name = "Policy Citations"),
     expand = expansion(mult = c(0.1, 0.1))
   ) +
-  scale_x_continuous(expand = expansion(mult = c(0.1, 0.1))) +
-  scale_color_manual(
-    values = c(
-      "Publication Count" = "#35B779FF",
-      "Policy Citations" = "#31688EFF"
-    )
+  scale_x_continuous(
+    limits = c(1960, NA),  # Set lower limit to 1960, upper limit remains automatic
+    expand = expansion(mult = c(0.1, 0.1))
   ) +
-  scale_fill_viridis_d(name = " ", option = "plasma") +
-  labs(x = "Year", color = " ", fill = "Outbreaks") +
+  
+  # Apply Lancet color palette from ggsci for lines
+  scale_color_lancet(name = " ") +  
+  
+  labs(x = "Year", color = " ") +
   theme_minimal() +
   theme(
     legend.position = "bottom",
@@ -239,6 +230,76 @@ ggplot(combined_df, aes(x = year)) +
   )
 
 ggsave("plots/timeline.png", width = 10)
+```
+
+```{r}
+library(ggplot2)
+library(ggsci)  # Lancet color palette
+library(viridis)  # Alternative color palettes
+
+ggplot(combined_df, aes(x = year)) +
+  geom_line(aes(y = n_pub, color = "Publication Count"), size = 1.5) +  # Thicker lines
+  geom_line(aes(y = n_cit * 15, color = "Policy Citations"), size = 1.5) +  
+  
+  geom_tile(
+    data = data_long,
+    aes(x = year, y = outbreak_y * 300),  
+    fill = "lightblue",  # Slightly more distinct outbreak markers
+    width = 1, height = 200,
+    alpha = 0.3
+  ) +
+  
+  geom_text(
+    data = centered_data,
+    aes(
+      x = center_x,          
+      y = center_y,          
+      label = pathogen
+    ),
+    vjust = 0.5,             
+    hjust = 0.5,             
+    size = 4,  # Slightly larger text
+    inherit.aes = FALSE,
+    color = "black"
+  ) +
+  
+  geom_vline(xintercept = c(1989, 2018, 2021), linetype = "dashed", color = "darkgrey", size = 1) +  # More distinct color
+  
+  scale_y_continuous(
+    name = "Publication Count",
+    sec.axis = sec_axis(~ . / 15, name = "Policy Citations"),
+    expand = expansion(mult = c(0.1, 0.1))
+  ) +
+  
+  scale_x_continuous(
+    limits = c(1960, NA),
+    expand = expansion(mult = c(0.1, 0.1))
+  ) +
+  
+  scale_color_lancet(name = " ") +  # Lancet colors for clarity
+  
+  labs(x = "Year", color = " ") +
+  
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.title.y.right = element_text(color = "black", size = 14),
+    axis.text.y.right = element_text(color = "black", size = 12),
+    axis.title.x = element_text(size = 14),        # Increased X title
+    axis.text.x = element_text(size = 12),
+    axis.title.y.left = element_text(color = "black", size = 14),
+    axis.text.y.left = element_text(color = "black", size = 12),
+
+    panel.grid.major = element_line(color = "grey90", linewidth = 0.25),  # Lighter grid
+    panel.grid.minor = element_line(color = "grey95", linewidth = 0.25),  # Even lighter minor grid
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),  # Box around graph
+    plot.background = element_rect(fill = "white", color = NA),
+    legend.title = element_text(size = 13, face = "bold"),  # Bold legend title
+    legend.text = element_text(size = 13)
+  )
+  
+ggsave("plots/timeline2.png", width = 10)
+
 ```
 
 

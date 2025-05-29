@@ -1,0 +1,434 @@
+---
+title: "Figure 2C 3"
+author: "Emma Chapman-Banks"
+date: "2025-01-18"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(repos = c(CRAN = "https://cran.rstudio.com"))
+```
+
+# ***Part 1: Cross-Referencing Policy Documents and Abstracts (Same Country)*** 
+
+Load libraries
+```{r}
+library("tidyverse")
+library("sf") 
+library("countrycode") 
+library("ggrepel") 
+library("gt")
+library("dplyr")
+library("tidyr")
+library(rnaturalearth)
+```
+
+Read the data
+```{r}
+overton_data <- read.csv("~/Google Drive/My Drive/HITAP/IDM Literature/analysis/data/data/overton_results_expanded.csv")
+idm_data <- read.csv("~/Google Drive/My Drive/HITAP/IDM Literature/analysis/data/data/clean_idm_lit_with_locations.csv")
+
+overton_data <- overton_data[, !grepl("^X", names(overton_data))]
+idm_data <- idm_data[, !grepl("^X", names(idm_data))]
+
+```
+
+World Data
+```{r}
+# Get world data 
+world <- ne_countries(scale = "small", returnclass = "sf")
+world$iso_a3 <- ifelse(world$iso_a3 == "-99", 
+                       world$iso_a3_eh,
+                       world$iso_a3)
+
+world$iso_a3 <- ifelse(world$iso_a3 == "-99", 
+                       world$sov_a3,
+                       world$iso_a3)
+
+# Fix iso_a3 for France
+world <- world %>%
+  mutate(iso_a3 = ifelse(name == "France", "FRA", iso_a3))
+
+# Define ISO 3 codes
+iso3_codes <- c("AND", "BHR", "COK", "COM", "CPV", "CUW", "FRO", "FSM", "GLP", "GUF", 
+                "GUM", "HKG", "IMN", "JEY", "LCA", "LIE", "MAC", "MDV", "MTQ", "MUS", 
+                "MYT", "NFK", "PYF", "REU", "SGP", "STP", "SYC", "unmapped", "VIR", 
+                "WSM")
+
+# Create a mapping for UN regions
+un_region_mapping <- list(
+  "Europe" = c("AND", "FRO", "IMN", "JEY", "LIE"),
+  "Asia" = c("BHR", "HKG", "MAC", "MDV", "SGP"),
+  "Oceania" = c("COK", "FSM", "GUM", "NFK", "PYF", "WSM"),
+  "Africa" = c("COM", "CPV", "MYT", "REU", "STP", "SYC", "MUS"),
+  "Americas" = c("CUW", "GLP", "GUF", "MTQ", "LCA", "VIR"),
+  "Antarctica" = character(0)  # No codes for Antarctica in this list
+)
+
+# Create a mapping for Income Group based on World Bank 2019 classification
+inc_group_mapping <- list(
+  "2. High income: nonOECD" = c("AND", "BHR", "CUW", "FRO", "GLP", "GUM", "HKG", "IMN", "JEY", 
+                    "LIE", "MAC", "MTQ", "MUS", "REU", "SGP"),
+  "3. Upper middle income" = c("CPV", "MDV", "STP", "SYC", "LCA"),
+  "4. Lower middle income" = c("COM", "FSM"),
+  "5. Low income" = character(0),  # No codes in this category
+  "Unmapped" = c("unmapped")
+)
+
+# Function to map values
+map_values <- function(code, mapping) {
+  match <- unlist(lapply(names(mapping), function(region) if (code %in% mapping[[region]]) region else NULL))
+  if (length(match) == 0) NA else match
+}
+
+# Create dataset
+df <- data.frame(
+  iso_a3 = iso3_codes,
+  region_un = sapply(iso3_codes, map_values, mapping = un_region_mapping),
+  income_grp = sapply(iso3_codes, map_values, mapping = inc_group_mapping),
+  stringsAsFactors = FALSE
+)
+
+# Define ISO 3 codes and country names
+iso3_names <- c(
+  "AND" = "Andorra", "BHR" = "Bahrain", "COK" = "Cook Islands", "COM" = "Comoros",
+  "CPV" = "Cape Verde", "CUW" = "Curaçao", "FRO" = "Faroe Islands", "FSM" = "Micronesia",
+  "GLP" = "Guadeloupe", "GUF" = "French Guiana", "GUM" = "Guam", "HKG" = "Hong Kong",
+  "IMN" = "Isle of Man", "JEY" = "Jersey", "LCA" = "Saint Lucia", "LIE" = "Liechtenstein",
+  "MAC" = "Macau", "MDV" = "Maldives", "MTQ" = "Martinique", "MUS" = "Mauritius",
+  "MYT" = "Mayotte", "NFK" = "Norfolk Island", "PYF" = "French Polynesia", "REU" = "Réunion",
+  "SGP" = "Singapore", "STP" = "São Tomé and Príncipe", "SYC" = "Seychelles",
+  "VIR" = "U.S. Virgin Islands", "WSM" = "Samoa", "unmapped" = NA
+)
+
+# Add country names to df
+df <- df %>%
+  mutate(admin = iso3_names[iso_a3])  # Match country names based on ISO 3 codes
+
+world <- bind_rows(world, df)
+```
+
+Before creating this R markdown, I ran the analysis by joining the datasets together then cross-referencing the dois and country location. This returned zero results. At first, I was puzzled, but then I realised it was because the countries might be spelt differently or be abbreviated. Therefore, before joining the datasets, I used the Iso3 country codes and standardised the country names across the data sets 
+
+Standardise IDM Data. This code is the same code used in the World Mapping Markdown.
+
+When trying to standarise the country codes for Overton data, I also realised that the new column it creates returns a value of NA if the country code is already written. Thus, I identified which country codes were already listed in the dataset and had to include the manual country mapping and ensure it doesn't pass as NA when doing country code mapping. 
+
+```{r}
+# Define manual mappings for unmatched values
+manual_country_mapping <- c(
+  "IGO" = "IGO",  
+  "EU" = "EU"     
+)
+
+# Standardise Overton Data and include manual mapping
+overton_data_clean <- overton_data %>%
+  mutate(
+    country_iso3 = if_else(
+      country %in% names(manual_country_mapping),
+      manual_country_mapping[country],
+      countrycode::countrycode(
+        sourcevar = country,
+        origin = "country.name",
+        destination = "iso3c",
+        warn = FALSE 
+      )
+    )
+  )
+
+```
+
+Now, cross-reference the two datasets.
+```{r}
+# Combine the datasets based on DOI and use the ISO3 country codes for comparison
+combined_data <- overton_data_clean %>%
+  inner_join(idm_data, by = c("source_doi" = "doi"))
+
+combined_data <- combined_data[, !grepl("^X", names(combined_data))]
+
+# Filter where the policy document's country matches the IDM abstract's location
+matching_countries <- combined_data %>%
+  filter(country_iso3 == Iso3) %>%
+  filter(Status != "Unmapped")
+
+# Count the number of matches
+number_of_matches <- nrow(matching_countries)
+
+# Print the result
+print(number_of_matches)
+
+# Summarize by Iso3 (count the number of abstracts per country)
+matching_countries_map <- matching_countries %>%
+  group_by(Iso3) %>%
+  summarize(count = n(), .groups = "drop") %>%
+  arrange(desc(count))
+
+# Join the summary data with the world map
+world_with_data <- world %>%
+  mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
+  left_join(matching_countries_map, by = c("iso_a3" = "Iso3"))
+
+# Define Lancet color palette for continuous fill
+lancet_colors <- pal_lancet()(2)  # Get 9 colors from Lancet palette
+
+# Plot the world map with Lancet colors
+ggplot(world_with_data) +
+  geom_sf(aes(fill = count)) +
+  scale_fill_gradientn(
+    colors = lancet_colors, 
+    na.value = "grey90", 
+    name = "Abstract Count"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+ggsave("plots/citing_from_their_own_countries.jpg")
+```
+
+# ***Part 2: Cross-Referencing Policy Documents and Abstracts (Different Country)*** 
+
+Now, let's answer this question: how many policy documents cite IDM literature from a country different from their own?
+```{r}
+# Filter where the policy document cites IDM literature from a different country
+global_research_citations <- combined_data %>%
+  filter(country_iso3 != Iso3)  %>%
+  filter(Status != "Unmapped")
+
+# Count the number of matches
+num_global_citations <- nrow(global_research_citations)
+
+# Print the result
+print(num_global_citations)
+
+# Summarize by Iso3 (count the number of abstracts per country)
+global_research_citations_map <- global_research_citations %>%
+  group_by(Iso3) %>%
+  summarize(count = n(), .groups = "drop") %>%
+  arrange(desc(count))
+
+# Join the summary data with the world map
+world_with_data <- world %>%
+  mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
+  left_join(global_research_citations_map, by = c("iso_a3" = "Iso3"))
+
+# Define Lancet color palette for continuous fill
+lancet_colors <- pal_lancet()(2)  # Extract 9 colors from the Lancet palette
+
+# Plot the world map with Lancet colors
+ggplot(world_with_data) +
+  geom_sf(aes(fill = count)) +
+  scale_fill_gradientn(
+    colors = lancet_colors, 
+    na.value = "grey90", 
+    name = "Abstract Count"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+
+ggsave("plots/citing_from_other_countries.jpg")
+```
+
+# ***Part 3: Deviance between self-citing & other countries*** 
+
+Now, let's answer this question: what's the difference in citing national work versus citing foreign work?
+```{r}
+# Filter where the policy document cites IDM literature from a different country
+names(global_research_citations_map) <- c("Iso3", "count_foreign_citations")
+names(matching_countries_map) <- c("Iso3", "count_national_citations")
+
+combined_data_deviance <- merge(matching_countries_map, global_research_citations_map, by = "Iso3", all = TRUE)
+
+combined_data_deviance$diff <- combined_data_deviance$count_national_citations - combined_data_deviance$count_foreign_citations
+
+combined_data_deviance$ratio <- combined_data_deviance$count_national_citations/ combined_data_deviance$count_foreign_citations
+
+# Join the summary data with the world map
+world_with_data <- world %>%
+  mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
+  left_join(combined_data_deviance, by = c("iso_a3" = "Iso3"))
+
+# Plot the world map
+ggplot(world_with_data) +
+  geom_sf(aes(fill = diff)) +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey90", name = "Citations from foreign IDM vs. national IDM literature") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+ggsave("plots/citing_deviance.jpg")
+
+# Define Lancet color palette for continuous fill
+lancet_colors <- pal_lancet()(2)  # Extract 9 colors from the Lancet palette
+
+world_with_data <- world_with_data %>%
+  filter(name != "Antarctica")
+
+# Plot the world map with Lancet colors
+ggplot(world_with_data) +
+  geom_sf(aes(fill = ratio)) +
+  scale_fill_gradientn(
+    colors = lancet_colors, 
+    na.value = "grey90", 
+    name = "Ratio of Citations from foreign IDM to domestic IDM literature"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+ggsave("plots/Fig2B_citing_ratio.jpg")
+```
+
+```{r}
+
+# Convert the date column to Date format (optional but recommended)
+overton_data_clean$published_on <- as.Date(overton_data_clean$published_on)
+
+# Extract the year and overwrite the column
+overton_data_clean$published_on <- format(overton_data_clean$published_on, "%Y")
+
+pc <- overton_data_clean |>
+  group_by(published_on, country_iso3) |>
+  summarize(n = n()) |>
+  rename(n_cit = n)
+
+pc <- pc %>%
+  dplyr::filter(!is.na(published_on))
+
+# Join the summary data with the world map
+world_with_data <- world %>%
+  mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
+  left_join(pc, by = c("iso_a3" = "country_iso3"))
+
+world_with_data <- world_with_data %>%
+  dplyr::filter(!is.na(published_on))
+
+# Plot the bar chart with Lancet colors
+ggplot(world_with_data, aes(x = published_on, y = n_cit, fill = economy)) +
+  geom_bar(stat = "identity") +
+  scale_fill_lancet(name = "Income Group") +  # Apply Lancet colors for discrete fill
+  labs(
+    x = "Year", 
+    y = "Number of Infectious Disease Modelling \nCitations in Policy Documents"
+  ) + 
+  theme_minimal()
+
+ggsave("plots/by_economy.png",
+       width = 15)
+
+# Plot the bar chart with Lancet colors
+ggplot(world_with_data, aes(x = published_on, y = n_cit, fill = income_grp)) +
+  geom_bar(stat = "identity") +
+  scale_fill_lancet(name = "Income Group") +  # Apply Lancet colors for discrete fill
+  labs(
+    x = "Year", 
+    y = "Number of Infectious Disease Modelling \nCitations in Policy Documents"
+  ) + 
+  theme_minimal()
+
+
+
+ggsave("plots/by_income_group.png",
+       width = 15)
+
+
+```
+
+
+```{r}
+1 - length(unique(overton_data_clean$country))/195
+pc <- overton_data_clean |>
+  group_by(published_on, country_iso3, type) |>
+  summarize(n = n()) |>
+  rename(n_cit = n)
+
+pc <- pc %>%
+  dplyr::filter(!is.na(published_on))
+
+pc_igo <- pc %>% 
+  filter(type == "igo")
+
+pc_igo$income_grp <- "Not country-specific"
+
+names(pc_igo) <- c("published_on", "iso_a3", "type.y","n_cit","income_grp")
+
+# Join the summary data with the world map
+world_with_data <- world %>%
+  mutate(iso_a3 = ifelse(iso_a3 == "-99", sov_a3, iso_a3)) %>%
+  left_join(pc, by = c("iso_a3" = "country_iso3"))
+
+world_with_data <- world_with_data[,c("published_on", "iso_a3", "type.y","n_cit","income_grp")]
+world_with_data <- st_drop_geometry(world_with_data)
+
+world_with_data <- bind_rows(world_with_data, pc_igo)
+
+world_with_data <- world_with_data %>%
+  dplyr::filter(!is.na(published_on))
+
+world_with_data$type.y <- factor(world_with_data$type.y, levels = c("government", "think tank", "igo","other"))
+
+# Plot the bar chart with Lancet colors
+ggplot(world_with_data, aes(x = published_on, y = n_cit, fill = income_grp)) +
+  geom_bar(stat = "identity") +
+  scale_fill_lancet(name = "Income Group") +  # Apply Lancet colors for discrete fill
+  labs(
+    x = "Year", 
+    y = "Number of Infectious Disease Modelling \nCitations in Policy Documents"
+  ) + 
+  facet_grid(rows = vars(type.y)) +  # Stack facets vertically based on type.y
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1) # Rotate x-axis text by 45 degrees
+  )
+
+
+ggsave("plots/by_income_group_type.png",
+       width = 14)
+
+
+library(ggplot2)
+library(ggsci)  # For Lancet colors
+library(viridis)  # Optional alternative color scheme
+
+world_with_data$type.y <- gsub("government", "Government", world_with_data$type.y)
+world_with_data$type.y <- gsub("think tank", "Think Tank", world_with_data$type.y)
+world_with_data$type.y <- gsub("other", "Other", world_with_data$type.y)
+world_with_data$type.y <- gsub("igo", "IGO", world_with_data$type.y)
+
+ggplot(world_with_data, aes(x = published_on, y = n_cit, fill = income_grp)) +
+  geom_bar(stat = "identity") +
+  
+  scale_fill_lancet(name = "Income Group") +  # Apply Lancet colors for discrete fill
+  
+  labs(
+    x = "Year", 
+    y = "Number of Infectious Disease Modelling \nCitations in Policy Documents"
+  ) + 
+  
+  facet_grid(rows = vars(type.y)) +  # Stack facets vertically based on type.y
+  
+  theme_minimal() +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),  # Add box around graph
+    panel.grid.major = element_line(color = "grey90", linewidth = 0.25),  # Lighter major grid
+    panel.grid.minor = element_line(color = "grey95", linewidth = 0.25),  # Lighter minor grid
+    strip.text = element_text(size = 14, face = "bold"),  # Make facet labels slightly larger & bold
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),  # Rotate x-axis text for readability
+    axis.text.y = element_text(size = 12),  # Adjust y-axis text size
+    axis.title = element_text(size = 14),  # Increase axis label size
+    legend.position = "bottom",  # Keep legend at bottom for better readability
+    legend.title = element_text(size = 13, face = "bold"),  # Bold legend title
+    legend.text = element_text(size = 13)
+  )
+  
+  
+ggsave("plots/by_income_group_type2.png",
+       width = 14, height = 7)
+
+country_df <- world_with_data |>
+  group_by(iso_a3,type.y, income_grp) |>
+  summarize(n = sum(n_cit)) |>
+  rename(n_cit = n)
+
+write.csv(country_df, "results/country_df_citations.csv",row.names = FALSE)
+```
+

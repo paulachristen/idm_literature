@@ -1,0 +1,67 @@
+"iso_a3","type.y","income_grp","n_cit"
+"AND","Government","2. High income: nonOECD",2
+"ARG","Government","3. Upper middle income",2
+"AUS","Government","1. High income: OECD",10
+"AUS","Other","1. High income: OECD",5
+"AUS","Think Tank","1. High income: OECD",8
+"AUT","Government","1. High income: OECD",1
+"AUT","Think Tank","1. High income: OECD",6
+"BEL","Government","1. High income: OECD",10
+"BRA","Government","3. Upper middle income",3
+"BRA","Think Tank","3. Upper middle income",6
+"CAN","Government","1. High income: OECD",53
+"CAN","Think Tank","1. High income: OECD",12
+"CHE","Government","1. High income: OECD",34
+"COL","Government","3. Upper middle income",1
+"CPV","Government","3. Upper middle income",1
+"DEU","Government","1. High income: OECD",20
+"DEU","Think Tank","1. High income: OECD",27
+"DNK","Think Tank","1. High income: OECD",2
+"ECU","Government","3. Upper middle income",1
+"EGY","Government","4. Lower middle income",1
+"ESP","Government","1. High income: OECD",51
+"EST","Government","1. High income: OECD",3
+"FIN","Government","1. High income: OECD",11
+"FRA","Government","1. High income: OECD",43
+"FRA","Think Tank","1. High income: OECD",4
+"GBR","Government","1. High income: OECD",60
+"GBR","Think Tank","1. High income: OECD",23
+"HUN","Government","1. High income: OECD",1
+"IDN","Government","4. Lower middle income",3
+"IGO","IGO","Not country-specific",367
+"IND","Government","4. Lower middle income",1
+"IND","Think Tank","4. Lower middle income",1
+"IRL","Government","1. High income: OECD",14
+"ISL","Government","1. High income: OECD",2
+"ITA","Government","1. High income: OECD",4
+"ITA","Think Tank","1. High income: OECD",2
+"JPN","Government","1. High income: OECD",15
+"KEN","Government","5. Low income",2
+"KEN","Think Tank","5. Low income",1
+"KOR","Think Tank","1. High income: OECD",1
+"LKA","Government","4. Lower middle income",1
+"LUX","Government","1. High income: OECD",1
+"MYS","Government","3. Upper middle income",2
+"NLD","Government","1. High income: OECD",23
+"NOR","Government","1. High income: OECD",7
+"NOR","Think Tank","1. High income: OECD",4
+"NZL","Government","1. High income: OECD",10
+"PER","Government","3. Upper middle income",4
+"PER","Think Tank","3. Upper middle income",1
+"PHL","Government","4. Lower middle income",2
+"PRT","Government","1. High income: OECD",5
+"SGP","Think Tank","2. High income: nonOECD",1
+"SRB","Government","3. Upper middle income",1
+"SVN","Government","1. High income: OECD",1
+"SWE","Government","1. High income: OECD",12
+"SWE","Think Tank","1. High income: OECD",1
+"THA","Government","3. Upper middle income",2
+"TUN","Government","3. Upper middle income",1
+"TWN","Government","2. High income: nonOECD",1
+"UGA","Government","5. Low income",5
+"URY","Government","3. Upper middle income",1
+"USA","Government","1. High income: OECD",180
+"USA","Other","1. High income: OECD",80
+"USA","Think Tank","1. High income: OECD",81
+"ZAF","Government","3. Upper middle income",8
+"ZAF","Think Tank","3. Upper middle income",6
