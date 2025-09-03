@@ -26,8 +26,8 @@ library(rnaturalearth)
 
 Read the data
 ```{r}
-overton_data <- read.csv("~/Google Drive/My Drive/HITAP/IDM Literature/analysis/data/data/overton_results_expanded.csv")
-idm_data <- read.csv("~/Google Drive/My Drive/HITAP/IDM Literature/analysis/data/data/clean_idm_lit_with_locations.csv")
+overton_data <- read.csv("data/overton_results_expanded.csv")
+idm_data <- read.csv("data/clean_idm_lit_with_locations.csv")
 
 overton_data <- overton_data[, !grepl("^X", names(overton_data))]
 idm_data <- idm_data[, !grepl("^X", names(idm_data))]
@@ -281,7 +281,7 @@ ggsave("plots/Fig2B_citing_ratio.jpg")
 ```{r}
 
 # Convert the date column to Date format (optional but recommended)
-overton_data_clean$published_on <- as.Date(overton_data_clean$published_on)
+overton_data_clean$published_on <- as.Date(overton_data_clean$published_on, format = "%d/%m/%Y")
 
 # Extract the year and overwrite the column
 overton_data_clean$published_on <- format(overton_data_clean$published_on, "%Y")
@@ -422,7 +422,7 @@ ggplot(world_with_data, aes(x = published_on, y = n_cit, fill = income_grp)) +
   
   
 ggsave("plots/by_income_group_type2.png",
-       width = 14, height = 7)
+       width = 14, height = 7, dpi = 1200)
 
 country_df <- world_with_data |>
   group_by(iso_a3,type.y, income_grp) |>
