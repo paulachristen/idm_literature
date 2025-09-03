@@ -667,7 +667,24 @@ ggplot(world_with_data) +
   theme_minimal() +
   theme(legend.position = "bottom")
 
-ggsave("plots/abstract_locations.jpg")
+ggsave("plots/abstract_locations.jpg", dpi = 1200)
 
+# Filter out Alaska (assuming world_with_data is based on rnaturalearth or similar)
+world_with_data <- world_with_data %>%
+  filter(!(name == "United States" & grepl("Alaska", subregion, ignore.case = TRUE)))
+
+# Plot the world map
+ggplot(world_with_data) +
+  geom_sf(aes(fill = n_cit_log)) +
+  scale_fill_gradient(low = "purple", high = "red", na.value = "grey90", name = "Log of Abstract Count") +
+  theme_minimal() +
+  theme(
+    legend.position = c(0, 0),  # Bottom left
+    legend.justification = c(0, 0),  # Anchor legend at bottom left
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank()   # Remove minor gridlines
+  )
+
+ggsave("plots/abstract_locations.jpg", dpi = 1200)
 
 ```
