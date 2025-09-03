@@ -21,7 +21,7 @@ library(ggsci)
 - read, clean, and save publication data.
 ```{r}
 # Get Publication data
-df <- read.csv("~/Google Drive/My Drive/HITAP/IDM Literature/analysis/data/data/490k_141224_1234_dedup.csv") #Or change file path to wherever files are located
+df <- read.csv("data/490k_141224_1234_dedup.csv") #Or change file path to wherever files are located
 df <- clean_names(df)
 
 # Remove all excluded records
@@ -45,7 +45,7 @@ df_annual_save <- df_annual
 - load in data for policy citations
 ```{r}
 
-pc <- read.csv("~/Google Drive/My Drive/HITAP/IDM Literature/analysis/data/data/overton_results_expanded.csv") 
+pc <- read.csv("data/overton_results_expanded.csv") 
 pc <- clean_names(pc)
 
 # Transform date of policy documents to year get year 
@@ -298,7 +298,7 @@ ggplot(combined_df, aes(x = year)) +
     legend.text = element_text(size = 13)
   )
   
-ggsave("plots/timeline2.png", width = 10)
+ggsave("plots/timeline2.png", width = 10, dpi = 1200)
 
 ```
 
